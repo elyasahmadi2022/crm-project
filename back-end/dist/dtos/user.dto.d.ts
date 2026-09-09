@@ -13,6 +13,7 @@ export declare const createuUserSchema: z.ZodObject<{
     }>;
     password: z.ZodOptional<z.ZodString>;
     salary: z.ZodOptional<z.ZodNumber>;
+    salaryCurrency: z.ZodDefault<z.ZodString>;
     position: z.ZodOptional<z.ZodString>;
     department: z.ZodOptional<z.ZodString>;
     joinDate: z.ZodOptional<z.ZodString>;
@@ -43,6 +44,7 @@ export declare const updateUserSchema: z.ZodObject<{
         EMPLOYEE: 'EMPLOYEE';
     }>>;
     isActive: z.ZodOptional<z.ZodBoolean>;
+    salaryCurrency: z.ZodOptional<z.ZodString>;
 }, z.core.$strip>;
 export type UpdateUserDto = z.infer<typeof updateUserSchema>;
 /**
@@ -103,6 +105,7 @@ export interface UserResponseDto {
     role: UserRole;
     isActive: boolean;
     salary: number | null;
+    salaryCurrency: string;
     position: string | null;
     department: string | null;
     joinDate: Date | null;

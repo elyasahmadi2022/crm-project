@@ -44,6 +44,7 @@ export interface InvoiceDto {
   customer: CustomerSummary
   project: ProjectSummary | null
   amount: string
+  currency: string
   status: InvoiceStatus
   payment: {
     amountPaid: string
@@ -61,6 +62,7 @@ export interface CreateInvoiceDto {
   customerId: number
   projectId?: number
   amount: number
+  currency: string
   issueDate?: string
   dueDate?: string
 }
@@ -72,7 +74,7 @@ export interface UpdateInvoiceDto {
 }
 
 export interface ChangeInvoiceStatusDto { newStatus: InvoiceStatus }
-export interface AddPaymentDto { amount: number; method?: string; paidAt?: string }
+export interface AddPaymentDto { amount: number; accountId: number; method?: string; paidAt?: string }
 
 export interface ListInvoicesQuery {
   customerId?: number
@@ -83,6 +85,8 @@ export interface ListInvoicesQuery {
 
 // ── Expenses ──────────────────────────────────────────────────────────────────
 export interface ExpenseDto {
+    currency: string
+    accountId: number | null
   id: number
   description: string
   category: ExpenseCategory
@@ -94,6 +98,8 @@ export interface ExpenseDto {
 }
 
 export interface CreateExpenseDto {
+    currency:        string
+    accountId:       number
   description:       string
   category:          ExpenseCategory
   amount:            number

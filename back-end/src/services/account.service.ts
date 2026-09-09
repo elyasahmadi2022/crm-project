@@ -176,6 +176,10 @@ export class AccountService {
         throw new Error("One or both accounts not found")
       }
 
+      if (fromAccount.currency !== toAccount.currency) {
+        throw new Error("Transfers must use accounts with the same currency")
+      }
+
       // Calculate new balances
       const newFromBalance = Number(fromAccount.balance) - dto.amount
       const newToBalance = Number(toAccount.balance) + dto.amount
@@ -245,23 +249,15 @@ export class AccountService {
       where: { isActive: true },
     })
 
-    const totalBalance = accounts.reduce(
-      (sum, acc) => sum + Number(acc.balance),
-      0
-    )
-
-    const byType = accounts.reduce((acc, account) => {
-      const type = account.type
-      if (!acc[type]) {
-        acc[type] = 0
-      }
-      acc[type] += Number(account.balance)
+    const byCurrency = accounts.reduce((acc, account) => {
+      const currency = account.currency
+      if (!acc[currency]) acc[currency] = 0
+      acc[currency] += Number(account.balance)
       return acc
     }, {} as Record<string, number>)
 
     return {
-      totalBalance,
-      byType,
+      byCurrency,
       accounts: accounts.map((acc) => ({
         id: acc.id,
         name: acc.name,

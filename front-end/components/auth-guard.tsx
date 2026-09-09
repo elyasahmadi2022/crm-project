@@ -51,7 +51,8 @@ export function AuthGuard({ children, requiredRole }: AuthGuardProps) {
   }, [isAuthenticated, user, requiredRole, router, pathname])
 
   // Avoid flashing protected content before the check completes
-  if (!checked) return null
+  const roleAllowed = !requiredRole || user?.role === requiredRole
+  if (!checked || !isAuthenticated || !user || !roleAllowed) return null
 
   return <>{children}</>
 }

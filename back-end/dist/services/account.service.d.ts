@@ -149,8 +149,7 @@ export declare class AccountService {
         createdAt: Date;
     })[]>;
     getBalanceSummary(): Promise<{
-        totalBalance: number;
-        byType: Record<string, number>;
+        byCurrency: Record<string, number>;
         accounts: {
             id: number;
             name: string;

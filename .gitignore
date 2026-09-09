@@ -3,3 +3,4 @@
 ./back-end/.env
 ./front-end/.env
 ./back-end/prisma/migrations
+./back-end/dist

@@ -2,7 +2,11 @@ import { Prisma, type Invoice, type Payment } from "../generated/prisma/index.js
 declare const invoiceDetails: {
     customer: true;
     project: true;
-    payments: true;
+    payments: {
+        include: {
+            account: true;
+        };
+    };
 };
 declare const budgetDetails: {
     expenses: {
@@ -21,6 +25,7 @@ declare const expenseDetails: {
     project: true;
     campaign: true;
     customCategory: true;
+    account: true;
 };
 export type PrismaInvoiceWithDetail = Prisma.InvoiceGetPayload<{
     include: typeof invoiceDetails;
@@ -48,9 +53,16 @@ export declare const financeRepository: {
     }, never, import("../generated/prisma/runtime/client.js").DefaultArgs, Prisma.PrismaClientOptions>;
     createPayment: (invoiceId: number, data: {
         amount: number;
+        accountId: number;
         method?: string;
         paidAt?: Date;
-    }) => Promise<Payment>;
+    }) => Promise<Payment & {
+        account: {
+            id: number;
+            name: string;
+            currency: string;
+        } | null;
+    }>;
     findBudgetById: (id: number) => Promise<PrismaBudgetWithDetail | null>;
     findManyBudgets: (skip: number, take: number) => Promise<PrismaBudgetWithDetail[]>;
     countBudgets: () => Promise<number>;
@@ -60,6 +72,7 @@ export declare const financeRepository: {
     findManyExpenses: (where: Prisma.ExpenseWhereInput, skip: number, take: number) => Promise<PrismaExpenseWithDetail[]>;
     countExpenses: (where: Prisma.ExpenseWhereInput) => Promise<number>;
     createExpense: (data: Prisma.ExpenseCreateInput) => Promise<PrismaExpenseWithDetail>;
+    createExpenseWithDebit: (data: Prisma.ExpenseCreateInput, accountId: number, amount: number) => Promise<PrismaExpenseWithDetail>;
     updateExpense: (id: number, data: Prisma.ExpenseUpdateInput) => Promise<PrismaExpenseWithDetail>;
 };
 export {};

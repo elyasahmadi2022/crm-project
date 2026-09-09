@@ -124,7 +124,10 @@ export default function AccountsPage() {
     setViewOpen(true)
   }
 
-  const totalBalance = accounts?.reduce((sum, acc) => sum + acc.balance, 0) || 0
+  const balancesByCurrency = (accounts ?? []).reduce<Record<string, number>>((totals, account) => {
+    totals[account.currency] = (totals[account.currency] ?? 0) + account.balance
+    return totals
+  }, {})
 
   // Filter accounts based on search query
   const filteredAccounts = accounts?.filter((account) =>
@@ -149,16 +152,17 @@ export default function AccountsPage() {
 
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
+        {Object.entries(balancesByCurrency).map(([currency, balance]) => (
+        <Card key={currency}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Balance</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Balance ({currency})</CardTitle>
             <Wallet className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalBalance.toLocaleString()} AFN</div>
-            <p className="text-xs text-muted-foreground">Across all accounts</p>
+            <div className="text-2xl font-bold">{balance.toLocaleString()} {currency}</div>
+            <p className="text-xs text-muted-foreground">Across {accounts?.filter((account) => account.currency === currency).length ?? 0} accounts</p>
           </CardContent>
-        </Card>
+        </Card>))}
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

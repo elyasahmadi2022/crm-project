@@ -1,4 +1,4 @@
-import { PayrollStatus } from "../generated/prisma"
+import { PayrollStatus } from "../generated/prisma/index.js"
 
 // ────────────────────────────────────────────────────────────────────
 // Payroll DTOs
@@ -27,7 +27,9 @@ export interface UpdatePayrollDto {
 
 export interface PayPayrollDto {
   paidFromId: number  // Account ID
+  salaryAmount: number
   paidBy?: string  // Name of person processing payment
+  exchangeRate: number
 }
 
 export interface RecordAdvanceDto {

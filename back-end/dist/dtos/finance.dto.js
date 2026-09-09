@@ -10,6 +10,7 @@ export const createInvoiceSchema = z.object({
     customerId: z.number().int().positive(),
     projectId: z.number().int().positive().optional(),
     amount: z.coerce.number().positive(),
+    currency: z.string().trim().min(3).max(3).default('USD'),
     issueDate: z.coerce.date().optional(),
     dueDate: z.coerce.date().optional(),
 });
@@ -28,6 +29,7 @@ export const listInvoicesQuerySchema = z.object({
 // ---------- Payment requests ----------
 export const createPaymentSchema = z.object({
     amount: z.coerce.number().positive(),
+    accountId: z.coerce.number().int().positive(),
     method: z.string().optional(),
     paidAt: z.coerce.date().optional(),
 });
@@ -37,6 +39,7 @@ export const toPaymentResponseDto = (payment) => ({
     amount: payment.amount.toString(),
     method: payment.method,
     paidAt: payment.paidAt,
+    account: payment.account ?? { id: payment.accountId ?? 0, name: 'Legacy payment', currency: '' },
 });
 export const toInvoiceStatusHistoryResponseDto = (history) => ({
     id: history.id,
@@ -54,6 +57,7 @@ export const toInvoiceResponseDto = (invoice) => {
         customer: toCustomerSummaryDto(invoice.customer),
         project: invoice.project ? toProjectSummaryDto(invoice.project) : null,
         amount: invoice.amount.toString(),
+        currency: invoice.currency,
         status: invoice.status,
         payment: {
             amountPaid: amountPaid.toFixed(2),
@@ -102,6 +106,8 @@ export const createExpenseSchema = z.object({
     description: z.string().min(1),
     category: z.nativeEnum(ExpenseCategory),
     amount: z.coerce.number().positive(),
+    currency: z.string().trim().min(3).max(3).default('USD'),
+    accountId: z.coerce.number().int().positive(),
     spentAt: z.coerce.date().optional(),
     budgetId: z.coerce.number().int().positive().optional(),
     projectId: z.coerce.number().int().positive().optional(),
@@ -120,6 +126,8 @@ export const toExpenseResponseDto = (expense) => ({
     description: expense.description,
     category: expense.category,
     amount: expense.amount.toString(),
+    currency: expense.currency,
+    accountId: expense.accountId,
     spentAt: expense.spentAt,
     budget: expense.budget ? { id: expense.budget.id, name: expense.budget.name } : null,
     project: expense.project ? toProjectSummaryDto(expense.project) : null,

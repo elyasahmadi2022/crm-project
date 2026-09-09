@@ -24,6 +24,7 @@ export const createInvoiceSchema = z.object({
   customerId: z.number().int().positive(),
   projectId: z.number().int().positive().optional(),
   amount: z.coerce.number().positive(),
+  currency: z.string().trim().min(3).max(3).default('USD'),
   issueDate: z.coerce.date().optional(),
   dueDate: z.coerce.date().optional(),
 });
@@ -51,6 +52,7 @@ export type ListInvoicesQueryDto = z.infer<typeof listInvoicesQuerySchema>;
 
 export const createPaymentSchema = z.object({
   amount: z.coerce.number().positive(),
+  accountId: z.coerce.number().int().positive(),
   method: z.string().optional(),
   paidAt: z.coerce.date().optional(),
 });
@@ -62,14 +64,16 @@ export interface PaymentResponseDto {
   amount: string;
   method: string | null;
   paidAt: Date;
+  account: { id: number; name: string; currency: string };
 }
 
-export const toPaymentResponseDto = (payment: Payment): PaymentResponseDto => ({
+export const toPaymentResponseDto = (payment: Payment & { account?: { id: number; name: string; currency: string } | null }): PaymentResponseDto => ({
   id: payment.id,
   invoiceId: payment.invoiceId,
   amount: payment.amount.toString(),
   method: payment.method,
   paidAt: payment.paidAt,
+  account: payment.account ?? { id: payment.accountId ?? 0, name: 'Legacy payment', currency: '' },
 });
 
 export interface InvoiceStatusHistoryResponseDto {
@@ -107,6 +111,7 @@ export interface InvoiceResponseDto {
   customer: CustomerSummaryDto;
   project: ProjectSummaryDto | null;
   amount: string;
+  currency: string;
   status: InvoiceStatus;
   payment: {
     amountPaid: string;
@@ -130,6 +135,7 @@ export const toInvoiceResponseDto = (invoice: InvoiceWithDetail): InvoiceRespons
     customer: toCustomerSummaryDto(invoice.customer),
     project: invoice.project ? toProjectSummaryDto(invoice.project) : null,
     amount: invoice.amount.toString(),
+    currency: invoice.currency,
     status: invoice.status,
     payment: {
       amountPaid: amountPaid.toFixed(2),
@@ -215,6 +221,8 @@ export const createExpenseSchema = z.object({
   description:      z.string().min(1),
   category:         z.nativeEnum(ExpenseCategory),
   amount:           z.coerce.number().positive(),
+  currency:         z.string().trim().min(3).max(3).default('USD'),
+  accountId:        z.coerce.number().int().positive(),
   spentAt:          z.coerce.date().optional(),
   budgetId:         z.coerce.number().int().positive().optional(),
   projectId:        z.coerce.number().int().positive().optional(),
@@ -248,6 +256,8 @@ export interface ExpenseResponseDto {
   description: string;
   category: ExpenseCategory;
   amount: string;
+  currency: string;
+  accountId: number | null;
   spentAt: Date;
   budget: { id: number; name: string } | null;
   project: ProjectSummaryDto | null;
@@ -261,6 +271,8 @@ export const toExpenseResponseDto = (expense: ExpenseWithDetail): ExpenseRespons
   description: expense.description,
   category: expense.category,
   amount: expense.amount.toString(),
+  currency: expense.currency,
+  accountId: expense.accountId,
   spentAt: expense.spentAt,
   budget: expense.budget ? { id: expense.budget.id, name: expense.budget.name } : null,
   project: expense.project ? toProjectSummaryDto(expense.project) : null,

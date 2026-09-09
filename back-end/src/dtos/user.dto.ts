@@ -8,6 +8,7 @@ export const createuUserSchema = z.object({
   role: z.nativeEnum(UserRole),
   password: z.string().min(6, "Password must be at least 6 characters").optional(),
   salary: z.number().optional(),
+    salaryCurrency: z.string().trim().min(3).max(3).default("USD"),
   position: z.string().optional(),
   department: z.string().optional(),
   joinDate: z.string().optional(),
@@ -31,7 +32,8 @@ export const updateUserSchema = z.object({
   name: z.string().min(1, "Name cannot be empty").optional(),
   email: z.string().email("Invalid email layout structure").optional(),
   role: z.nativeEnum(UserRole).optional(),
-  isActive: z.boolean().optional()
+    isActive: z.boolean().optional(),
+    salaryCurrency: z.string().trim().min(3).max(3).optional()
 });
 export type UpdateUserDto = z.infer<typeof updateUserSchema>;
 
@@ -91,6 +93,7 @@ export interface UserResponseDto {
   role: UserRole;
   isActive: boolean;
   salary: number | null;
+    salaryCurrency: string;
   position: string | null;
   department: string | null;
   joinDate: Date | null;
@@ -113,6 +116,7 @@ export const toUserResponseDto = (user: UserWithCounts): UserResponseDto => ({
   role: user.role,
   isActive: user.isActive,
   salary: user.salary ? Number(user.salary) : null,
+    salaryCurrency: user.salaryCurrency,
   position: user.position ?? null,
   department: user.department ?? null,
   joinDate: user.joinDate ?? null,

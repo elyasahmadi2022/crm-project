@@ -9,6 +9,7 @@ export declare const createInvoiceSchema: z.ZodObject<{
     customerId: z.ZodNumber;
     projectId: z.ZodOptional<z.ZodNumber>;
     amount: z.ZodCoercedNumber<unknown>;
+    currency: z.ZodDefault<z.ZodString>;
     issueDate: z.ZodOptional<z.ZodCoercedDate<unknown>>;
     dueDate: z.ZodOptional<z.ZodCoercedDate<unknown>>;
 }, z.core.$strip>;
@@ -42,6 +43,7 @@ export declare const listInvoicesQuerySchema: z.ZodObject<{
 export type ListInvoicesQueryDto = z.infer<typeof listInvoicesQuerySchema>;
 export declare const createPaymentSchema: z.ZodObject<{
     amount: z.ZodCoercedNumber<unknown>;
+    accountId: z.ZodCoercedNumber<unknown>;
     method: z.ZodOptional<z.ZodString>;
     paidAt: z.ZodOptional<z.ZodCoercedDate<unknown>>;
 }, z.core.$strip>;
@@ -52,8 +54,19 @@ export interface PaymentResponseDto {
     amount: string;
     method: string | null;
     paidAt: Date;
+    account: {
+        id: number;
+        name: string;
+        currency: string;
+    };
 }
-export declare const toPaymentResponseDto: (payment: Payment) => PaymentResponseDto;
+export declare const toPaymentResponseDto: (payment: Payment & {
+    account?: {
+        id: number;
+        name: string;
+        currency: string;
+    } | null;
+}) => PaymentResponseDto;
 export interface InvoiceStatusHistoryResponseDto {
     id: number;
     oldStatus: InvoiceStatus | null;
@@ -74,6 +87,7 @@ export interface InvoiceResponseDto {
     customer: CustomerSummaryDto;
     project: ProjectSummaryDto | null;
     amount: string;
+    currency: string;
     status: InvoiceStatus;
     payment: {
         amountPaid: string;
@@ -158,6 +172,8 @@ export declare const createExpenseSchema: z.ZodObject<{
         CUSTOM: 'CUSTOM';
     }>;
     amount: z.ZodCoercedNumber<unknown>;
+    currency: z.ZodDefault<z.ZodString>;
+    accountId: z.ZodCoercedNumber<unknown>;
     spentAt: z.ZodOptional<z.ZodCoercedDate<unknown>>;
     budgetId: z.ZodOptional<z.ZodCoercedNumber<unknown>>;
     projectId: z.ZodOptional<z.ZodCoercedNumber<unknown>>;
@@ -178,6 +194,8 @@ export declare const updateExpenseSchema: z.ZodObject<{
         CUSTOM: 'CUSTOM';
     }>>;
     amount: z.ZodOptional<z.ZodCoercedNumber<unknown>>;
+    currency: z.ZodOptional<z.ZodDefault<z.ZodString>>;
+    accountId: z.ZodOptional<z.ZodCoercedNumber<unknown>>;
     spentAt: z.ZodOptional<z.ZodOptional<z.ZodCoercedDate<unknown>>>;
     budgetId: z.ZodOptional<z.ZodOptional<z.ZodCoercedNumber<unknown>>>;
     projectId: z.ZodOptional<z.ZodOptional<z.ZodCoercedNumber<unknown>>>;
@@ -216,6 +234,8 @@ export interface ExpenseResponseDto {
     description: string;
     category: ExpenseCategory;
     amount: string;
+    currency: string;
+    accountId: number | null;
     spentAt: Date;
     budget: {
         id: number;

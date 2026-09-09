@@ -82,6 +82,7 @@ export function useAddPaymentMutation() {
     onSuccess: (_data, { id }) => {
       qc.invalidateQueries({ queryKey: financeKeys.invoices.lists() })
       qc.invalidateQueries({ queryKey: financeKeys.invoices.detail(id) })
+      qc.invalidateQueries({ queryKey: ["accounts"] })
       show({ title: "Payment recorded", type: "success" })
     },
     onError: (err) => show({ title: "Failed to record payment", description: getApiErrorMessage(err), type: "error" }),
@@ -103,6 +104,7 @@ export function useCreateExpenseMutation() {
     mutationFn: (dto: CreateExpenseDto) => financeService.createExpense(dto),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: financeKeys.expenses.lists() })
+      qc.invalidateQueries({ queryKey: ["accounts"] })
       show({ title: "Expense created", type: "success" })
     },
     onError: (err) => show({ title: "Failed to create expense", description: getApiErrorMessage(err), type: "error" }),
@@ -115,6 +117,7 @@ export function useUpdateExpenseMutation() {
     mutationFn: ({ id, dto }: { id: number; dto: UpdateExpenseDto }) => financeService.updateExpense(id, dto),
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: financeKeys.expenses.lists() })
+      qc.invalidateQueries({ queryKey: ["accounts"] })
       qc.setQueryData(financeKeys.expenses.detail(data.id), data)
       show({ title: "Expense updated", type: "success" })
     },

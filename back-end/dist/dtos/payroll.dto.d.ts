@@ -19,7 +19,9 @@ export interface UpdatePayrollDto {
 }
 export interface PayPayrollDto {
     paidFromId: number;
+    salaryAmount: number;
     paidBy?: string;
+    exchangeRate: number;
 }
 export interface RecordAdvanceDto {
     employeeId: number;

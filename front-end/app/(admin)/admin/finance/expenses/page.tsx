@@ -37,6 +37,7 @@ import {
   useUpdateExpenseMutation,
 } from "@/queries/finance.queries"
 import { useListProjectsQuery }  from "@/queries/project.queries"
+import { useAccounts } from "@/queries/account.queries"
 import { useExpenseCategoryConfigsQuery } from "@/queries/expense-category.queries"
 import type { ExpenseDto, ExpenseCategory, ListExpensesQuery } from "@/services/finance.service"
 import type { CustomCategoryDto } from "@/services/expense-category.service"
@@ -155,6 +156,8 @@ const expenseSchema = z.object({
     error: "Please select a category.",
   }),
   amount:           z.coerce.number().min(0.01, "Amount is required."),
+    currency:         z.string().length(3),
+    accountId:        z.coerce.number().min(1, "Source account is required."),
   spentAt:          z.string().optional(),
   linkType:         z.enum(["none", "project"]),
   linkedId:         z.union([z.coerce.number().positive(), z.literal(""), z.undefined()]),
@@ -177,6 +180,7 @@ function ExpenseFormDialog({ initial, onClose }: { initial?: ExpenseDto; onClose
   const isPending = createMut.isPending || updateMut.isPending
 
   const { data: pData } = useListProjectsQuery()
+  const { data: accounts = [] } = useAccounts()
   const { data: cfgData } = useExpenseCategoryConfigsQuery()
 
   const projects         = pData?.data ?? []
@@ -190,6 +194,8 @@ function ExpenseFormDialog({ initial, onClose }: { initial?: ExpenseDto; onClose
       description: initial?.description ?? "",
       category:    initial?.category    ?? ("OTHER" as ExpenseCategory),
       amount:      initial ? parseFloat(initial.amount) : (undefined as unknown as number),
+      currency:    initial?.currency ?? "USD",
+      accountId:   initial?.accountId ?? (undefined as unknown as number),
       spentAt:     initial?.spentAt?.slice(0, 10) ?? "",
       linkType:         initLinkType,
       linkedId:         (initLinkedId || undefined) as number | "" | undefined,
@@ -213,6 +219,8 @@ function ExpenseFormDialog({ initial, onClose }: { initial?: ExpenseDto; onClose
       description:      v.description,
       category:         v.category,
       amount:           v.amount,
+      currency:         v.currency,
+      accountId:        v.accountId,
       spentAt:          v.spentAt || undefined,
       projectId:        v.linkType === "project" ? id : undefined,
       customCategoryId: v.customCategoryId ? Number(v.customCategoryId) : undefined,
@@ -302,7 +310,7 @@ function ExpenseFormDialog({ initial, onClose }: { initial?: ExpenseDto; onClose
 
         <div className="flex flex-col gap-1.5">
           <label htmlFor="exp-amount" className="text-sm font-medium">
-            Amount ($) <span className="text-destructive">*</span>
+            Amount ({watch("currency")}) <span className="text-destructive">*</span>
           </label>
           <Input
             id="exp-amount"
@@ -314,6 +322,34 @@ function ExpenseFormDialog({ initial, onClose }: { initial?: ExpenseDto; onClose
             {...register("amount")}
           />
           <FieldError message={errors.amount?.message} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium">Expense currency</label>
+          <Controller control={control} name="currency" render={({ field }) => (
+            <Select value={field.value} onValueChange={(value) => { field.onChange(value); setValue("accountId", undefined as unknown as number) }}>
+              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {["AFN", "USD", "EUR"].map((currency) => <SelectItem key={currency} value={currency}>{currency}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium">Pay from account ({watch("currency")})</label>
+          <Controller control={control} name="accountId" render={({ field }) => (
+            <Select value={field.value ? String(field.value) : ""} onValueChange={(value) => field.onChange(Number(value))}>
+              <SelectTrigger className="w-full" aria-invalid={!!errors.accountId}><SelectValue placeholder="Select source account" /></SelectTrigger>
+              <SelectContent>
+                {accounts.filter((account) => account.isActive && account.currency === watch("currency")).map((account) => (
+                  <SelectItem key={account.id} value={String(account.id)}>{account.name} ({account.currency})</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )} />
+          <FieldError message={errors.accountId?.message} />
         </div>
       </div>
 

@@ -39,21 +39,26 @@ export interface CreateTransactionDto {
   reference?: string
 }
 
+function normalizeAccount(account: Account): Account {
+  return { ...account, balance: Number(account.balance) || 0 }
+}
+
 export const accountService = {
   // Accounts
   getAllAccounts: async (): Promise<Account[]> => {
     const response = await api.get("/accounts")
-    return response.data.data || response.data
+    const accounts = response.data.data || response.data
+    return Array.isArray(accounts) ? accounts.map(normalizeAccount) : []
   },
 
   getAccountById: async (id: number): Promise<Account> => {
     const response = await api.get(`/accounts/${id}`)
-    return response.data.data || response.data
+    return normalizeAccount(response.data.data || response.data)
   },
 
   createAccount: async (data: CreateAccountDto): Promise<Account> => {
     const response = await api.post("/accounts", data)
-    return response.data.data || response.data
+    return normalizeAccount(response.data.data || response.data)
   },
 
   updateAccount: async (id: number, data: Partial<CreateAccountDto>): Promise<Account> => {

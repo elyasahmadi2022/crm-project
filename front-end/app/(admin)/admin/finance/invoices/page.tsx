@@ -40,6 +40,7 @@ import {
 } from "@/queries/finance.queries"
 import { useListCustomersQuery } from "@/queries/customer.queries"
 import { useListProjectsQuery }  from "@/queries/project.queries"
+import { useAccounts } from "@/queries/account.queries"
 import type { InvoiceDto, InvoiceStatus, ListInvoicesQuery } from "@/services/finance.service"
 
 // ── constants ─────────────────────────────────────────────────────────────────
@@ -57,10 +58,10 @@ const STATUS_CLASS: Record<InvoiceStatus, string> = {
   CANCELLED: "bg-zinc-100 text-zinc-500 border-transparent dark:bg-zinc-800 dark:text-zinc-400",
 }
 
-function fmtMoney(v: string | number | null | undefined) {
+function fmtMoney(v: string | number | null | undefined, currency = "USD") {
   if (v == null) return "—"
   const n = typeof v === "string" ? parseFloat(v) : v
-  return isNaN(n) ? "—" : `$${n.toLocaleString("en-US", { minimumFractionDigits: 2 })}`
+  return isNaN(n) ? "—" : `${n.toLocaleString("en-US", { minimumFractionDigits: 2 })} ${currency}`
 }
 function fmtDate(v: string | null | undefined) {
   if (!v) return "—"
@@ -107,6 +108,7 @@ const createSchema = z.object({
   customerId: z.coerce.number().min(1, "Customer is required."),
   projectId:  z.coerce.number().positive().optional().or(z.literal("")),
   amount:     z.coerce.number().min(0.01, "Amount is required."),
+  currency:   z.string().length(3),
   issueDate:  z.string().optional(),
   dueDate:    z.string().optional(),
 })
@@ -128,6 +130,7 @@ type StatusForm = z.infer<typeof statusSchema>
 
 const paymentSchema = z.object({
   amount: z.coerce.number().min(0.01, "Amount is required."),
+  accountId: z.coerce.number().min(1, "Receiving account is required."),
   method: z.string().optional(),
   paidAt: z.string().optional(),
 })
@@ -145,7 +148,7 @@ function CreateInvoiceForm({ onClose }: { onClose: () => void }) {
 
   const { register, handleSubmit, control, formState: { errors } } = useForm<CreateForm>({
     resolver: zodResolver(createSchema) as any,
-    defaultValues: { customerId: undefined as unknown as number, projectId: "", amount: undefined as unknown as number, issueDate: "", dueDate: "" },
+    defaultValues: { customerId: undefined as unknown as number, projectId: "", amount: undefined as unknown as number, currency: "USD", issueDate: "", dueDate: "" },
     mode: "onTouched",
   })
 
@@ -154,6 +157,7 @@ function CreateInvoiceForm({ onClose }: { onClose: () => void }) {
       customerId: v.customerId,
       projectId:  v.projectId ? Number(v.projectId) : undefined,
       amount:     v.amount,
+      currency:   v.currency,
       issueDate:  v.issueDate || undefined,
       dueDate:    v.dueDate   || undefined,
     }, { onSuccess: onClose })
@@ -175,6 +179,17 @@ function CreateInvoiceForm({ onClose }: { onClose: () => void }) {
           )
         }} />
         <FieldError message={errors.customerId?.message} />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm font-medium">Invoice currency</label>
+        <Controller control={control} name="currency" render={({ field }) => (
+          <Select value={field.value} onValueChange={field.onChange}>
+            <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {['AFN', 'USD', 'EUR'].map((currency) => <SelectItem key={currency} value={currency}>{currency}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )} />
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -336,27 +351,43 @@ function ChangeStatusForm({ invoice, onClose }: { invoice: InvoiceDto; onClose: 
 // ═══════════════════════════════════════════════════════════════════════════════
 function AddPaymentForm({ invoice, onClose }: { invoice: InvoiceDto; onClose: () => void }) {
   const mutation = useAddPaymentMutation()
+  const { data: accounts = [] } = useAccounts()
   const { register, handleSubmit, control, formState: { errors } } = useForm<PaymentForm>({
     resolver: zodResolver(paymentSchema) as any,
-    defaultValues: { amount: undefined as unknown as number, method: "", paidAt: "" },
+    defaultValues: { amount: undefined as unknown as number, accountId: undefined as unknown as number, method: "", paidAt: "" },
     mode: "onTouched",
   })
   function onSubmit(v: PaymentForm) {
-    mutation.mutate({ id: invoice.id, dto: { amount: v.amount, method: v.method || undefined, paidAt: v.paidAt || undefined } }, { onSuccess: onClose })
+    mutation.mutate({ id: invoice.id, dto: { amount: v.amount, accountId: v.accountId, method: v.method || undefined, paidAt: v.paidAt || undefined } }, { onSuccess: onClose })
   }
   const balanceDue = parseFloat(invoice.payment.balanceDue)
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4">
       <div className="grid grid-cols-2 gap-3 rounded-lg border bg-muted/30 p-3 text-sm">
-        <div><p className="text-xs text-muted-foreground">Invoice total</p><p className="font-semibold">{fmtMoney(invoice.amount)}</p></div>
-        <div><p className="text-xs text-muted-foreground">Amount paid</p><p className="font-semibold text-green-600">{fmtMoney(invoice.payment.amountPaid)}</p></div>
-        <div><p className="text-xs text-muted-foreground">Balance due</p><p className={`font-semibold ${balanceDue > 0 ? "text-destructive" : "text-muted-foreground"}`}>{fmtMoney(invoice.payment.balanceDue)}</p></div>
+        <div><p className="text-xs text-muted-foreground">Invoice total</p><p className="font-semibold">{fmtMoney(invoice.amount, invoice.currency)}</p></div>
+        <div><p className="text-xs text-muted-foreground">Amount paid</p><p className="font-semibold text-green-600">{fmtMoney(invoice.payment.amountPaid, invoice.currency)}</p></div>
+        <div><p className="text-xs text-muted-foreground">Balance due</p><p className={`font-semibold ${balanceDue > 0 ? "text-destructive" : "text-muted-foreground"}`}>{fmtMoney(invoice.payment.balanceDue, invoice.currency)}</p></div>
         <div><p className="text-xs text-muted-foreground">Payments</p><p className="font-semibold">{invoice.payment.paymentsCount}</p></div>
       </div>
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="pay-amount" className="text-sm font-medium">Payment amount ($) <span className="text-destructive">*</span></label>
+        <label htmlFor="pay-amount" className="text-sm font-medium">Payment amount ({invoice.currency}) <span className="text-destructive">*</span></label>
         <Input id="pay-amount" type="number" min="0.01" step="0.01" placeholder="0.00" aria-invalid={!!errors.amount} {...register("amount")} />
         <FieldError message={errors.amount?.message} />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm font-medium">Receive into account ({invoice.currency})</label>
+        <Controller control={control} name="accountId" render={({ field }) => (
+          <Select value={field.value ? String(field.value) : ""} onValueChange={(value) => field.onChange(Number(value))}>
+            <SelectTrigger className="w-full" aria-invalid={!!errors.accountId}><SelectValue placeholder="Select receiving account" /></SelectTrigger>
+            <SelectContent>
+              {accounts.filter((account) => account.isActive && account.currency === invoice.currency).map((account) => (
+                <SelectItem key={account.id} value={String(account.id)}>{account.name} ({account.currency})</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )} />
+        <FieldError message={errors.accountId?.message} />
+        {!accounts.some((account) => account.isActive && account.currency === invoice.currency) && <p className="text-xs text-destructive">Create an active {invoice.currency} account before recording this payment.</p>}
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-1.5">
@@ -414,9 +445,14 @@ export default function InvoicesPage() {
   }, [invoices, search])
 
   // aggregate stats
-  const totalInvoiced  = invoices.reduce((s, i) => s + parseFloat(i.amount), 0)
-  const totalPaid      = invoices.reduce((s, i) => s + parseFloat(i.payment.amountPaid), 0)
-  const totalOutstanding = invoices.reduce((s, i) => s + parseFloat(i.payment.balanceDue), 0)
+  const totalsByCurrency = invoices.reduce<Record<string, { invoiced: number; paid: number; outstanding: number }>>((totals, invoice) => {
+    const current = totals[invoice.currency] ?? { invoiced: 0, paid: 0, outstanding: 0 }
+    current.invoiced += parseFloat(invoice.amount)
+    current.paid += parseFloat(invoice.payment.amountPaid)
+    current.outstanding += parseFloat(invoice.payment.balanceDue)
+    totals[invoice.currency] = current
+    return totals
+  }, {})
   const overdueCount   = invoices.filter((i) => i.payment.isOverdue).length
 
   return (
@@ -438,9 +474,11 @@ export default function InvoicesPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="Total invoiced"  value={fmtMoney(totalInvoiced)}   icon={FileText}       color="text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400" />
-        <StatCard label="Collected"       value={fmtMoney(totalPaid)}       icon={CheckCircle2}   color="text-green-600 bg-green-100 dark:bg-green-900/30 dark:text-green-400" />
-        <StatCard label="Outstanding"     value={fmtMoney(totalOutstanding)} icon={Clock}          color="text-orange-600 bg-orange-100 dark:bg-orange-900/30 dark:text-orange-400" />
+        {Object.entries(totalsByCurrency).map(([currency, totals]) => <React.Fragment key={currency}>
+          <StatCard label={`Invoiced (${currency})`} value={fmtMoney(totals.invoiced, currency)} icon={FileText} color="text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400" />
+          <StatCard label={`Collected (${currency})`} value={fmtMoney(totals.paid, currency)} icon={CheckCircle2} color="text-green-600 bg-green-100 dark:bg-green-900/30 dark:text-green-400" />
+          <StatCard label={`Outstanding (${currency})`} value={fmtMoney(totals.outstanding, currency)} icon={Clock} color="text-orange-600 bg-orange-100 dark:bg-orange-900/30 dark:text-orange-400" />
+        </React.Fragment>)}
         <StatCard label="Overdue"         value={String(overdueCount)}      icon={AlertTriangle}  color="text-red-600 bg-red-100 dark:bg-red-900/30 dark:text-red-400" sub="invoices past due" />
       </div>
 
@@ -511,11 +549,11 @@ export default function InvoicesPage() {
                         {STATUS_LABELS[inv.status]}
                       </span>
                     </TableCell>
-                    <TableCell className="font-medium">{fmtMoney(inv.amount)}</TableCell>
-                    <TableCell className="text-green-600 dark:text-green-400 text-sm">{fmtMoney(inv.payment.amountPaid)}</TableCell>
+                    <TableCell className="font-medium">{fmtMoney(inv.amount, inv.currency)}</TableCell>
+                    <TableCell className="text-green-600 dark:text-green-400 text-sm">{fmtMoney(inv.payment.amountPaid, inv.currency)}</TableCell>
                     <TableCell>
                       <span className={parseFloat(inv.payment.balanceDue) > 0 ? "text-sm font-medium text-destructive" : "text-sm text-muted-foreground"}>
-                        {fmtMoney(inv.payment.balanceDue)}
+                        {fmtMoney(inv.payment.balanceDue, inv.currency)}
                       </span>
                     </TableCell>
                     <TableCell>

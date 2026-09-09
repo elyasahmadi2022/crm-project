@@ -1,0 +1,5 @@
+ALTER TABLE `users` ADD COLUMN `salaryCurrency` VARCHAR(191) NOT NULL DEFAULT 'USD';
+ALTER TABLE `payrolls` ADD COLUMN `salaryCurrency` VARCHAR(191) NOT NULL DEFAULT 'USD';
+ALTER TABLE `payrolls` ADD COLUMN `paidCurrency` VARCHAR(191) NULL;
+ALTER TABLE `payrolls` ADD COLUMN `exchangeRate` DECIMAL(18, 8) NULL;
+ALTER TABLE `payrolls` ADD COLUMN `paidAmount` DECIMAL(12, 2) NULL;

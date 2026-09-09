@@ -14,11 +14,16 @@ export interface Payroll {
   deductionReason: string | null
   bonuses: number
   netPay: number
+  salaryCurrency: string
   status: "PENDING" | "PAID" | "FAILED"
   paidFromId: number | null
   paidFrom: { id: number; name: string; balance: number; currency: string } | null
   paidAt: string | null
   paidBy: string | null
+  paidCurrency: string | null
+  exchangeRate: number | null
+  paidAmount: number | null
+  payments: { salaryAmount: number; paidAmount: number; salaryCurrency: string; paidCurrency: string; exchangeRate: number; paidAt: string; paidBy: string | null }[]
   notes: string | null
   employee: {
     id: number
@@ -34,6 +39,7 @@ export interface PayrollAdvance {
   id: number
   employeeId: number
   amount: number
+  currency: string
   reason: string | null
   advanceDate: string
   deductedAmount: number
@@ -160,8 +166,8 @@ export function useDeletePayroll() {
 export function usePayPayroll() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ id, paidFromId, paidBy }: { id: number; paidFromId: number; paidBy?: string }) => {
-      const r = await api.post(`/payroll/${id}/pay`, { paidFromId, paidBy })
+    mutationFn: async ({ id, paidFromId, salaryAmount, paidBy, exchangeRate }: { id: number; paidFromId: number; salaryAmount: number; paidBy?: string; exchangeRate: number }) => {
+      const r = await api.post(`/payroll/${id}/pay`, { paidFromId, salaryAmount, paidBy, exchangeRate })
       return unwrap<Payroll>(r)
     },
     onSuccess: (data) => {

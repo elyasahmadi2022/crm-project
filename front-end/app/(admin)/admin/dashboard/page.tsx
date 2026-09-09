@@ -303,19 +303,22 @@ export default function AdminDashboardPage() {
               <div className="flex justify-between text-xs text-muted-foreground">
                 <span>Invoiced</span>
                 <span>
-                  ${financeSnapshot?.totalInvoiced 
-                    ? parseFloat(financeSnapshot.totalInvoiced).toLocaleString() 
-                    : '0'}
+                  {Object.entries(financeSnapshot?.totalsByCurrency ?? {}).map(([currency, totals]) => `${totals.invoiced.toLocaleString()} ${currency}`).join(" / ") || "0"}
                 </span>
               </div>
               <div className="h-2 w-full rounded-full bg-muted overflow-hidden flex">
                 {(() => {
                   if (!financeSnapshot) return null
+                  const currencyEntries = Object.entries(financeSnapshot.totalsByCurrency ?? {})
+                  if (currencyEntries.length > 1) {
+                    return <div className="flex h-full items-center justify-center text-xs text-muted-foreground">Separate currencies shown below</div>
+                  }
                   
-                  const total = parseFloat(financeSnapshot.totalInvoiced || '0')
-                  const paid = parseFloat(financeSnapshot.totalPaid || '0')
-                  const outstanding = parseFloat(financeSnapshot.totalOutstanding || '0')
-                  const overdue = parseFloat(financeSnapshot.totalOverdue || '0')
+                  const totals = Object.values(financeSnapshot.totalsByCurrency ?? {})
+                  const total = totals.reduce((sum, value) => sum + value.invoiced, 0)
+                  const paid = totals.reduce((sum, value) => sum + value.paid, 0)
+                  const outstanding = totals.reduce((sum, value) => sum + value.outstanding, 0)
+                  const overdue = totals.reduce((sum, value) => sum + value.overdue, 0)
                   
                   if (total === 0) {
                     return <div className="h-full w-full bg-muted" />
@@ -337,15 +340,15 @@ export default function AdminDashboardPage() {
               <div className="flex gap-4 text-xs flex-wrap">
                 <span className="flex items-center gap-1">
                   <span className="size-2 rounded-full bg-green-500 inline-block" /> 
-                  Paid ${financeSnapshot?.totalPaid ? parseFloat(financeSnapshot.totalPaid).toLocaleString() : '0'}
+                  Paid {Object.entries(financeSnapshot?.totalsByCurrency ?? {}).map(([currency, totals]) => `${totals.paid.toLocaleString()} ${currency}`).join(" / ") || "0"}
                 </span>
                 <span className="flex items-center gap-1">
                   <span className="size-2 rounded-full bg-yellow-400 inline-block" /> 
-                  Outstanding ${financeSnapshot?.totalOutstanding ? parseFloat(financeSnapshot.totalOutstanding).toLocaleString() : '0'}
+                  Outstanding {Object.entries(financeSnapshot?.totalsByCurrency ?? {}).map(([currency, totals]) => `${totals.outstanding.toLocaleString()} ${currency}`).join(" / ") || "0"}
                 </span>
                 <span className="flex items-center gap-1">
                   <span className="size-2 rounded-full bg-destructive inline-block" /> 
-                  Overdue ${financeSnapshot?.totalOverdue ? parseFloat(financeSnapshot.totalOverdue).toLocaleString() : '0'}
+                  Overdue {Object.entries(financeSnapshot?.totalsByCurrency ?? {}).map(([currency, totals]) => `${totals.overdue.toLocaleString()} ${currency}`).join(" / ") || "0"}
                 </span>
               </div>
             </div>

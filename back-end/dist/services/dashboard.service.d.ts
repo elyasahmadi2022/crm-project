@@ -32,10 +32,12 @@ export declare const DashboardService: {
             days: number;
         }[];
         financeSnapshot: {
-            totalInvoiced: string;
-            totalPaid: string;
-            totalOutstanding: string;
-            totalOverdue: string;
+            totalsByCurrency: Record<string, {
+                invoiced: number;
+                paid: number;
+                outstanding: number;
+                overdue: number;
+            }>;
             overdueInvoices: {
                 id: number;
                 customer: string;

@@ -6,7 +6,7 @@ import { prisma } from "../lib/primsa.js";
 const invoiceDetails = {
     customer: true,
     project: true,
-    payments: true
+    payments: { include: { account: true } }
 } satisfies Prisma.InvoiceInclude;
 
 const budgetDetails = {
@@ -19,6 +19,7 @@ const expenseDetails = {
     project: true,
     campaign: true,
     customCategory: true,
+    account: true,
 } satisfies Prisma.ExpenseInclude;
 
 export type PrismaInvoiceWithDetail = Prisma.InvoiceGetPayload<{ include: typeof invoiceDetails }>;
@@ -52,9 +53,35 @@ export const financeRepository = {
     },
 
     // --- Payments ---
-    createPayment: (invoiceId: number, data: { amount: number; method?: string; paidAt?: Date }): Promise<Payment> => {
-        return prisma.payment.create({
-            data: { invoiceId, amount: data.amount, method: data.method || null, paidAt: data.paidAt || new Date() }
+    createPayment: async (invoiceId: number, data: { amount: number; accountId: number; method?: string; paidAt?: Date }): Promise<Payment & { account: { id: number; name: string; currency: string } | null }> => {
+        return prisma.$transaction(async (tx) => {
+            const invoice = await tx.invoice.findUnique({ where: { id: invoiceId } });
+            const account = await tx.account.findUnique({ where: { id: data.accountId } });
+            if (!invoice) throw new Error('Invoice not found.');
+            if (!account || !account.isActive) throw new Error('Receiving account not found or inactive.');
+            if (invoice.currency !== account.currency) {
+                throw new Error(`Account currency (${account.currency}) must match invoice currency (${invoice.currency}).`);
+            }
+
+            const newBalance = Number(account.balance) + data.amount;
+            const payment = await tx.payment.create({
+                data: { invoiceId, accountId: data.accountId, amount: data.amount, method: data.method || null, paidAt: data.paidAt || new Date() },
+                include: { account: { select: { id: true, name: true, currency: true } } },
+            });
+            await tx.account.update({ where: { id: data.accountId }, data: { balance: newBalance } });
+            await tx.accountTransaction.create({
+                data: {
+                    accountId: data.accountId,
+                    type: 'CREDIT',
+                    amount: data.amount,
+                    balanceAfter: newBalance,
+                    description: `Payment received for invoice #${invoiceId}`,
+                    reference: `PAYMENT-INV-${invoiceId}`,
+                    referenceType: 'invoice',
+                    referenceId: invoiceId,
+                },
+            });
+            return payment;
         });
     },
 
@@ -87,6 +114,30 @@ export const financeRepository = {
     },
     createExpense: (data: Prisma.ExpenseCreateInput): Promise<PrismaExpenseWithDetail> => {
         return prisma.expense.create({ data, include: expenseDetails });
+    },
+    createExpenseWithDebit: async (data: Prisma.ExpenseCreateInput, accountId: number, amount: number): Promise<PrismaExpenseWithDetail> => {
+        return prisma.$transaction(async (tx) => {
+            const account = await tx.account.findUnique({ where: { id: accountId } });
+            if (!account || !account.isActive) throw new Error('Source account not found or inactive.');
+            const newBalance = Number(account.balance) - amount;
+            if (newBalance < 0) throw new Error('Insufficient funds in source account.');
+
+            const expense = await tx.expense.create({ data, include: expenseDetails });
+            await tx.account.update({ where: { id: accountId }, data: { balance: newBalance } });
+            await tx.accountTransaction.create({
+                data: {
+                    accountId,
+                    type: 'DEBIT',
+                    amount,
+                    balanceAfter: newBalance,
+                    description: `Expense: ${data.description as string}`,
+                    reference: `EXPENSE-${expense.id}`,
+                    referenceType: 'expense',
+                    referenceId: expense.id,
+                },
+            });
+            return expense;
+        });
     },
     updateExpense: (id: number, data: Prisma.ExpenseUpdateInput): Promise<PrismaExpenseWithDetail> => {
         return prisma.expense.update({ where: { id }, data, include: expenseDetails });

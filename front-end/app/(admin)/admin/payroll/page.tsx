@@ -81,7 +81,7 @@ export default function PayrollPage() {
   })
   const [createForm, setCreateForm] = useState(blankCreate())
   const [editForm,   setEditForm]   = useState({ baseSalary:"", bonuses:"0", deductions:"0", deductionReason:"", bonusReason:"", notes:"" })
-  const [payForm,    setPayForm]    = useState({ accountId: "", paidBy: "" })
+  const [payForm,    setPayForm]    = useState({ accountId: "", salaryAmount: "", paidBy: "", exchangeRate: "1" })
   const [advForm,    setAdvForm]    = useState({ employeeId:"", amount:"", reason:"", advanceDate: now.toISOString().split("T")[0]!, notes:"" })
   const [genForm,    setGenForm]    = useState({ month, year })
 
@@ -100,6 +100,15 @@ export default function PayrollPage() {
   const paidCount   = payrolls.filter(p => p.status === "PAID").length
   const pendingCount = payrolls.filter(p => p.status === "PENDING").length
   const outstanding = advances.filter(a => !a.fullyDeducted).reduce((s, a) => s + (Number(a.amount) - Number(a.deductedAmount)), 0)
+  const totalPayrollByCurrency = payrolls.reduce<Record<string, number>>((totals, payroll) => {
+    totals[payroll.salaryCurrency] = (totals[payroll.salaryCurrency] ?? 0) + Number(payroll.netPay)
+    return totals
+  }, {})
+  const outstandingAdvancesByCurrency = advances.filter(a => !a.fullyDeducted).reduce<Record<string, number>>((totals, advance) => {
+    totals[advance.currency] = (totals[advance.currency] ?? 0) + Number(advance.amount) - Number(advance.deductedAmount)
+    return totals
+  }, {})
+  const formatCurrencyTotals = (totals: Record<string, number>) => Object.entries(totals).map(([currency, amount]) => `${amount.toLocaleString()} ${currency}`).join(" / ") || "0"
 
   // ── handlers ───────────────────────────────────────────────────────
   function handleCreate() {
@@ -144,13 +153,14 @@ export default function PayrollPage() {
 
   function openPay(p: Payroll) {
     setSelected(p)
-    setPayForm({ accountId: "", paidBy: "" })
+    const paid = p.payments.reduce((sum, payment) => sum + Number(payment.salaryAmount), 0)
+    setPayForm({ accountId: "", salaryAmount: Math.max(0, Number(p.netPay) - paid).toString(), paidBy: "", exchangeRate: "1" })
     setPayOpen(true)
   }
 
   function handlePay() {
-    if (!selected || !payForm.accountId) { toast.error("Select an account"); return }
-    payMut.mutate({ id: selected.id, paidFromId: Number(payForm.accountId), paidBy: payForm.paidBy || undefined },
+    if (!selected || !payForm.accountId || !payForm.salaryAmount) { toast.error("Payment amount and account are required"); return }
+    payMut.mutate({ id: selected.id, paidFromId: Number(payForm.accountId), salaryAmount: Number(payForm.salaryAmount), paidBy: payForm.paidBy || undefined, exchangeRate: Number(payForm.exchangeRate) },
       { onSuccess: () => setPayOpen(false) })
   }
 
@@ -199,10 +209,10 @@ export default function PayrollPage() {
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-4">
         {[
-          { label:"Total Payroll",    value:`${totalNet.toLocaleString()} AFN`,   icon:DollarSign,  color:"text-foreground" },
+          { label:"Total Payroll",    value:formatCurrencyTotals(totalPayrollByCurrency),   icon:DollarSign,  color:"text-foreground" },
           { label:"Paid",             value:`${paidCount} employees`,             icon:CheckCircle2, color:"text-green-600" },
           { label:"Pending",          value:`${pendingCount} employees`,          icon:Clock,        color:"text-amber-600" },
-          { label:"Outstanding Adv.", value:`${outstanding.toLocaleString()} AFN`, icon:AlertCircle, color:"text-blue-600" },
+          { label:"Outstanding Adv.", value:formatCurrencyTotals(outstandingAdvancesByCurrency), icon:AlertCircle, color:"text-blue-600" },
         ].map(({label,value,icon:Icon,color})=>(
           <Card key={label}>
             <CardContent className="flex items-center gap-3 py-4">
@@ -295,7 +305,8 @@ export default function PayrollPage() {
                       )}
                       <div>
                         <p className="text-xs text-muted-foreground">Net Pay</p>
-                        <p className="font-bold text-base">{Number(p.netPay).toLocaleString()} AFN</p>
+                        <p className="font-bold text-base">{Number(p.netPay).toLocaleString()} {p.salaryCurrency}</p>
+                        <p className="text-xs text-muted-foreground">Paid: {p.payments.reduce((sum, payment) => sum + Number(payment.salaryAmount), 0).toLocaleString()} {p.salaryCurrency} · Remaining: {Math.max(0, Number(p.netPay) - p.payments.reduce((sum, payment) => sum + Number(payment.salaryAmount), 0)).toLocaleString()} {p.salaryCurrency}</p>
                       </div>
                     </div>
 
@@ -333,7 +344,7 @@ export default function PayrollPage() {
                 {/* Month totals */}
                 <div className="flex justify-end gap-6 pt-3 border-t text-sm">
                   <span className="text-muted-foreground">Total Net:</span>
-                  <span className="font-bold text-base">{totalNet.toLocaleString()} AFN</span>
+                  <span className="font-bold text-base">{formatCurrencyTotals(totalPayrollByCurrency)}</span>
                 </div>
               </div>
             )}
@@ -368,10 +379,10 @@ export default function PayrollPage() {
                       <p className="text-xs text-muted-foreground">{new Date(a.advanceDate).toLocaleDateString()}</p>
                     </div>
                     <div className="text-right text-sm shrink-0">
-                      <p className="font-bold">{Number(a.amount).toLocaleString()} AFN</p>
+                      <p className="font-bold">{Number(a.amount).toLocaleString()} {a.currency}</p>
                       <p className="text-xs text-muted-foreground">
                         Deducted: {Number(a.deductedAmount).toLocaleString()} · 
-                        Remaining: {(Number(a.amount)-Number(a.deductedAmount)).toLocaleString()}
+                        Remaining: {(Number(a.amount)-Number(a.deductedAmount)).toLocaleString()} {a.currency}
                       </p>
                     </div>
                   </div>
@@ -399,7 +410,7 @@ export default function PayrollPage() {
                 <SelectContent>
                   {employees.map((e: any) => (
                     <SelectItem key={e.id} value={e.id.toString()}>
-                      {e.name}{e.salary ? ` — ${Number(e.salary).toLocaleString()} AFN` : ""}
+                      {e.name}{e.salary ? ` — ${Number(e.salary).toLocaleString()} ${e.salaryCurrency}` : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -422,16 +433,16 @@ export default function PayrollPage() {
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label>Base Salary (AFN) *</Label>
+              <Label>Base Salary ({employees.find((e: any) => String(e.id) === createForm.employeeId)?.salaryCurrency ?? "currency"}) *</Label>
               <Input type="number" placeholder="0" value={createForm.baseSalary} onChange={e=>setCreateForm(f=>({...f,baseSalary:e.target.value}))}/>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Bonuses (AFN)</Label>
+                <Label>Bonuses ({employees.find((e: any) => String(e.id) === createForm.employeeId)?.salaryCurrency ?? "currency"})</Label>
                 <Input type="number" placeholder="0" value={createForm.bonuses} onChange={e=>setCreateForm(f=>({...f,bonuses:e.target.value}))}/>
               </div>
               <div className="space-y-1.5">
-                <Label>Deductions (AFN)</Label>
+                <Label>Deductions ({employees.find((e: any) => String(e.id) === createForm.employeeId)?.salaryCurrency ?? "currency"})</Label>
                 <Input type="number" placeholder="0" value={createForm.deductions} onChange={e=>setCreateForm(f=>({...f,deductions:e.target.value}))}/>
               </div>
             </div>
@@ -449,7 +460,7 @@ export default function PayrollPage() {
             {createForm.baseSalary && (
               <div className="flex justify-between text-sm bg-muted rounded-lg px-3 py-2">
                 <span className="text-muted-foreground">Preview Net Pay</span>
-                <span className="font-bold">{previewNet(createForm.baseSalary, createForm.bonuses, createForm.deductions).toLocaleString()} AFN</span>
+                <span className="font-bold">{previewNet(createForm.baseSalary, createForm.bonuses, createForm.deductions).toLocaleString()} {employees.find((e: any) => String(e.id) === createForm.employeeId)?.salaryCurrency ?? ""}</span>
               </div>
             )}
           </div>
@@ -518,7 +529,8 @@ export default function PayrollPage() {
           <div className="space-y-4 py-3">
             <div className="flex justify-between items-center p-3 bg-muted rounded-lg">
               <span className="text-sm text-muted-foreground">Net Salary to Pay</span>
-              <span className="text-xl font-bold">{Number(selected?.netPay ?? 0).toLocaleString()} AFN</span>
+              <span className="text-xl font-bold">{Number(selected?.netPay ?? 0).toLocaleString()} {selected?.salaryCurrency}</span>
+              <span className="text-xs text-muted-foreground">Remaining: {selected ? Math.max(0, Number(selected.netPay) - selected.payments.reduce((sum, payment) => sum + Number(payment.salaryAmount), 0)).toLocaleString() : "0"} {selected?.salaryCurrency}</span>
             </div>
             {selected && Number(selected.deductions) > 0 && selected.deductionReason && (
               <div className="p-3 border border-amber-200 rounded-lg bg-amber-50 dark:bg-amber-900/10">
@@ -527,17 +539,25 @@ export default function PayrollPage() {
               </div>
             )}
             <div className="space-y-1.5">
+              <Label>Salary amount to pay ({selected?.salaryCurrency}) *</Label>
+              <Input type="number" min="0.01" step="0.01" value={payForm.salaryAmount} onChange={e => setPayForm(f => ({ ...f, salaryAmount: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
               <Label>Pay from Account *</Label>
               <Select value={payForm.accountId} onValueChange={v => setPayForm(f=>({...f, accountId: v ?? ""}))}>
-                <SelectTrigger className="w-full"><SelectValue placeholder="Select account"/></SelectTrigger>
+                <SelectTrigger className="w-full">
+                  <SelectValue>
+                    {accounts.find((account: any) => String(account.id) === payForm.accountId)?.name ?? "Select account"}
+                  </SelectValue>
+                </SelectTrigger>
                 <SelectContent>
                   {(accounts as any[]).map((acc) => (
                     <SelectItem key={acc.id} value={acc.id.toString()}
-                      disabled={Number(acc.balance) < Number(selected?.netPay ?? 0)}>
+                      disabled={Number(acc.balance) < Number(payForm.salaryAmount || 0) * Number(payForm.exchangeRate || 0)}>
                       <span className="flex items-center gap-2">
                         <Wallet className="h-3.5 w-3.5"/>
                         {acc.name} — {Number(acc.balance).toLocaleString()} {acc.currency}
-                        {Number(acc.balance) < Number(selected?.netPay ?? 0) && (
+                        {Number(acc.balance) < Number(payForm.salaryAmount || 0) * Number(payForm.exchangeRate || 0) && (
                           <span className="text-xs text-destructive ml-1">(insufficient)</span>
                         )}
                       </span>
@@ -546,6 +566,19 @@ export default function PayrollPage() {
                 </SelectContent>
               </Select>
             </div>
+            {(() => {
+              const selectedAccount = accounts.find((account: any) => String(account.id) === payForm.accountId)
+              const currenciesDiffer = !!selectedAccount && selectedAccount.currency !== selected?.salaryCurrency
+              return currenciesDiffer ? (
+                <div className="space-y-1.5">
+                  <Label>Exchange rate (1 {selected?.salaryCurrency} = ? {selectedAccount.currency})</Label>
+                  <Input type="number" min="0.00000001" step="0.00000001" value={payForm.exchangeRate} onChange={e => setPayForm(f => ({ ...f, exchangeRate: e.target.value }))} />
+                  <p className="text-xs text-muted-foreground">Account debit: {(Number(payForm.salaryAmount || 0) * Number(payForm.exchangeRate || 0)).toLocaleString()} {selectedAccount.currency}</p>
+                </div>
+              ) : selectedAccount ? (
+                <p className="text-xs text-muted-foreground">Same currency payment: {selectedAccount.currency}. No exchange rate required.</p>
+              ) : null
+            })()}
             <div className="space-y-1.5">
               <Label>Paid By <span className="text-muted-foreground text-xs">(optional)</span></Label>
               <Input placeholder="Name of person processing" value={payForm.paidBy} onChange={e=>setPayForm(f=>({...f,paidBy:e.target.value}))}/>
@@ -579,7 +612,7 @@ export default function PayrollPage() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Amount (AFN) *</Label>
+              <Label>Amount ({employees.find((e: any) => String(e.id) === advForm.employeeId)?.salaryCurrency ?? "currency"}) *</Label>
               <Input type="number" placeholder="0" value={advForm.amount} onChange={e=>setAdvForm(f=>({...f,amount:e.target.value}))}/>
             </div>
             <div className="space-y-1.5">
@@ -658,11 +691,11 @@ export default function PayrollPage() {
               <div className="grid grid-cols-2 gap-3 text-sm">
                 {[
                   ["Status",     <StatusBadge status={selected.status}/>],
-                  ["Base Salary",`${Number(selected.baseSalary).toLocaleString()} AFN`],
+                    ["Base Salary",`${Number(selected.baseSalary).toLocaleString()} ${selected.salaryCurrency}`],
                   ["Bonuses",    `+${Number(selected.bonuses).toLocaleString()} AFN`],
                   ["Deductions", `−${Number(selected.deductions).toLocaleString()} AFN`],
                   ["Advances",   `−${Number(selected.advances).toLocaleString()} AFN`],
-                  ["Net Pay",    <span className="font-bold text-base">{Number(selected.netPay).toLocaleString()} AFN</span>],
+                    ["Net Pay",    <span className="font-bold text-base">{Number(selected.netPay).toLocaleString()} {selected.salaryCurrency}</span>],
                 ].map(([k, v]) => (
                   <div key={String(k)}>
                     <p className="text-xs text-muted-foreground mb-0.5">{String(k)}</p>
@@ -682,6 +715,7 @@ export default function PayrollPage() {
                   <p className="text-sm">Account: {selected.paidFrom.name}</p>
                   {selected.paidAt && <p className="text-xs text-muted-foreground">{new Date(selected.paidAt).toLocaleString()}</p>}
                   {selected.paidBy && <p className="text-xs text-muted-foreground">By: {selected.paidBy}</p>}
+                  {selected.paidAmount && <p className="text-xs text-muted-foreground">Paid: {Number(selected.paidAmount).toLocaleString()} {selected.paidCurrency} (rate {selected.exchangeRate})</p>}
                 </div>
               )}
               {selected.notes && (

@@ -7,6 +7,7 @@ export interface Employee {
   role: string
   isActive: boolean
   salary: number | null
+  salaryCurrency: string
   position: string | null
   department: string | null
   joinDate: string | null
@@ -22,6 +23,7 @@ export interface CreateEmployeeDto {
   password: string
   role: string
   salary?: number
+  salaryCurrency: string
   position?: string
   department?: string
   joinDate?: string
@@ -33,6 +35,7 @@ export interface UpdateEmployeeDto {
   role?: string
   isActive?: boolean
   salary?: number
+  salaryCurrency?: string
   position?: string
   department?: string
   joinDate?: string

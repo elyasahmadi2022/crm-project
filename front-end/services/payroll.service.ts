@@ -6,6 +6,7 @@ export interface Payroll {
   month: number
   year: number
   baseSalary: number
+  salaryCurrency: string
   bonuses: number
   deductions: number
   advances: number
@@ -13,6 +14,10 @@ export interface Payroll {
   status: string
   paidFrom: number | null
   paidAt: string | null
+  paidCurrency: string | null
+  exchangeRate: number | null
+  paidAmount: number | null
+  payments: { salaryAmount: number; paidAmount: number; salaryCurrency: string; paidCurrency: string; exchangeRate: number; paidAt: string; paidBy: string | null }[]
   notes: string | null
   createdAt: string
   updatedAt: string
@@ -57,6 +62,7 @@ export interface ProcessPayrollDto {
   payrollId: number
   accountId: number
   notes?: string
+  exchangeRate: number
 }
 
 export interface CreateAdvanceDto {

@@ -57,8 +57,14 @@ export default function LoginPage() {
     })
   }
 
-  // Don't flash the form while redirecting an already-authed user
-  if (isAuthenticated) return null
+  // Keep the public shell stable while an authenticated user is redirected.
+  if (isAuthenticated) {
+    return (
+      <div className="flex min-h-40 items-center justify-center text-sm text-muted-foreground" role="status" aria-live="polite">
+        Redirecting...
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">

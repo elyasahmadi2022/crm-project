@@ -77,22 +77,32 @@ export const DashboardService = {
         // Revenue this month (paid invoices)
         const thisMonthInvoices = invoices.filter(inv => inv.issueDate && inv.issueDate >= thisMonthStart);
         // Calculate total paid amount from payments
-        const revenueThisMonth = invoices
+        const revenueByCurrency = invoices
             .filter(inv => inv.issueDate && inv.issueDate >= thisMonthStart)
-            .reduce((sum, inv) => {
+            .reduce((totals, inv) => {
             const totalPaid = inv.payments.reduce((pSum, p) => pSum + parseFloat(p.amount.toString()), 0);
-            return sum + totalPaid;
-        }, 0);
+            totals[inv.currency] = (totals[inv.currency] ?? 0) + totalPaid;
+            return totals;
+        }, {});
         const lastMonthInvoicesData = await prisma.invoice.findMany({
             where: {
                 issueDate: { gte: lastMonth, lt: thisMonthStart },
             },
             include: { payments: true },
         });
-        const lastMonthRevenue = lastMonthInvoicesData.reduce((sum, inv) => {
+        const lastMonthRevenueByCurrency = lastMonthInvoicesData.reduce((totals, inv) => {
             const totalPaid = inv.payments.reduce((pSum, p) => pSum + parseFloat(p.amount.toString()), 0);
-            return sum + totalPaid;
-        }, 0);
+            totals[inv.currency] = (totals[inv.currency] ?? 0) + totalPaid;
+            return totals;
+        }, {});
+        const revenueThisMonth = Object.values(revenueByCurrency).reduce((sum, value) => sum + value, 0);
+        const lastMonthRevenue = Object.values(lastMonthRevenueByCurrency).reduce((sum, value) => sum + value, 0);
+        const revenueLabel = Object.entries(revenueByCurrency).map(([currency, value]) => `${value.toLocaleString('en-US', { minimumFractionDigits: 2 })} ${currency}`).join(' / ') || '0.00';
+        const revenueTrendLabel = Object.entries(revenueByCurrency).map(([currency, value]) => {
+            const previous = lastMonthRevenueByCurrency[currency] ?? 0;
+            const trend = previous > 0 ? ((value - previous) / previous * 100).toFixed(1) : '0.0';
+            return `${trend}% ${currency}`;
+        }).join(' / ') || '+0%';
         // Overdue invoices - invoices past due date with unpaid balance
         const overdueInvoices = invoices.filter(inv => {
             if (!inv.dueDate || inv.status === 'PAID')
@@ -124,10 +134,8 @@ export const DashboardService = {
             },
             {
                 label: "Revenue This Month",
-                value: `$${revenueThisMonth.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
-                trend: lastMonthRevenue > 0
-                    ? `${((revenueThisMonth - lastMonthRevenue) / lastMonthRevenue * 100).toFixed(1)}%`
-                    : '+0%',
+                value: revenueLabel,
+                trend: revenueTrendLabel,
                 up: revenueThisMonth >= lastMonthRevenue,
                 sub: "vs last month",
                 icon: "DollarSign",
@@ -188,29 +196,26 @@ export const DashboardService = {
             };
         });
         // Calculate finance snapshot
-        const totalInvoiced = invoices.reduce((sum, inv) => sum + parseFloat(inv.amount.toString()), 0);
-        const totalPaid = invoices.reduce((sum, inv) => {
+        const totalsByCurrency = invoices.reduce((totals, inv) => {
             const paid = inv.payments.reduce((pSum, p) => pSum + parseFloat(p.amount.toString()), 0);
-            return sum + paid;
-        }, 0);
-        const totalOutstanding = invoices.reduce((sum, inv) => {
-            if (!inv.dueDate || inv.status === 'PAID')
-                return sum;
-            const paid = inv.payments.reduce((pSum, p) => pSum + parseFloat(p.amount.toString()), 0);
+            const current = totals[inv.currency] ?? { invoiced: 0, paid: 0, outstanding: 0, overdue: 0 };
+            current.invoiced += parseFloat(inv.amount.toString());
+            current.paid += paid;
+            if (!inv.dueDate || inv.status === 'PAID') {
+                totals[inv.currency] = current;
+                return totals;
+            }
             const balance = parseFloat(inv.amount.toString()) - paid;
             const isOverdue = inv.dueDate < now;
-            return isOverdue ? sum : sum + balance;
-        }, 0);
-        const totalOverdue = overdueInvoices.reduce((sum, inv) => {
-            const paid = inv.payments.reduce((pSum, p) => pSum + parseFloat(p.amount.toString()), 0);
-            const balance = parseFloat(inv.amount.toString()) - paid;
-            return sum + balance;
-        }, 0);
+            if (isOverdue)
+                current.overdue += balance;
+            else
+                current.outstanding += balance;
+            totals[inv.currency] = current;
+            return totals;
+        }, {});
         const financeSnapshot = {
-            totalInvoiced: totalInvoiced.toFixed(2),
-            totalPaid: totalPaid.toFixed(2),
-            totalOutstanding: totalOutstanding.toFixed(2),
-            totalOverdue: totalOverdue.toFixed(2),
+            totalsByCurrency,
             overdueInvoices: overdueInvoices.slice(0, 4).map(inv => {
                 const paid = inv.payments.reduce((sum, p) => sum + parseFloat(p.amount.toString()), 0);
                 const balance = parseFloat(inv.amount.toString()) - paid;
@@ -220,7 +225,7 @@ export const DashboardService = {
                 return {
                     id: inv.id,
                     customer: inv.customer.companyName,
-                    amount: `$${balance.toLocaleString('en-US')}`,
+                    amount: `${balance.toLocaleString('en-US')} ${inv.currency}`,
                     days: daysOverdue,
                 };
             }),

@@ -31,6 +31,7 @@ export const financeService = {
     async createInvoice(data) {
         const invoice = await financeRepository.createInvoice({
             amount: data.amount,
+            currency: data.currency,
             issueDate: data.issueDate || new Date(),
             dueDate: data.dueDate || null,
             status: InvoiceStatus.DRAFT,
@@ -71,6 +72,7 @@ export const financeService = {
         }
         const payment = await financeRepository.createPayment(invoiceId, {
             amount: data.amount,
+            accountId: data.accountId,
             ...(data.method !== undefined ? { method: data.method } : {}),
             ...(data.paidAt !== undefined ? { paidAt: data.paidAt } : {})
         });
@@ -154,16 +156,19 @@ export const financeService = {
         };
     },
     async createExpense(data) {
-        const expense = await financeRepository.createExpense({
+        const expenseData = {
             description: data.description,
             category: data.category,
             amount: data.amount,
+            currency: data.currency,
             spentAt: data.spentAt || new Date(),
             budget: data.budgetId ? { connect: { id: data.budgetId } } : undefined,
             project: data.projectId ? { connect: { id: data.projectId } } : undefined,
             campaign: data.campaignId ? { connect: { id: data.campaignId } } : undefined,
             customCategory: data.customCategoryId ? { connect: { id: data.customCategoryId } } : undefined,
-        });
+            account: { connect: { id: data.accountId } },
+        };
+        const expense = await financeRepository.createExpenseWithDebit(expenseData, data.accountId, data.amount);
         return toExpenseResponseDto(expense);
     },
     async updateExpense(id, data) {

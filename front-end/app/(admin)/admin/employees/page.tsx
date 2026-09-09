@@ -70,6 +70,7 @@ export default function EmployeesPage() {
     password: "admin123",
     role: "DEVELOPER",
     salary: 0,
+    salaryCurrency: "USD",
     position: "",
     department: "",
     joinDate: new Date().toISOString().split("T")[0],
@@ -82,6 +83,7 @@ export default function EmployeesPage() {
       password: "admin123",
       role: "DEVELOPER",
       salary: 0,
+      salaryCurrency: "USD",
       position: "",
       department: "",
       joinDate: new Date().toISOString().split("T")[0],
@@ -315,6 +317,7 @@ export default function EmployeesPage() {
       password: "",
       role: employee.role && typeof employee.role === "string" ? employee.role : "DEVELOPER",
       salary: Number(employee.salary) || 0,
+      salaryCurrency: employee.salaryCurrency || "USD",
       position: employee.position || "",
       department: employee.department || "",
       joinDate: employee.joinDate?.split("T")[0] || new Date().toISOString().split("T")[0],
@@ -334,6 +337,7 @@ export default function EmployeesPage() {
       password: "",
       role: selectedEmployee.role && typeof selectedEmployee.role === "string" ? selectedEmployee.role : "DEVELOPER",
       salary: Number(selectedEmployee.salary) || 0,
+      salaryCurrency: selectedEmployee.salaryCurrency || "USD",
       position: selectedEmployee.position || "",
       department: selectedEmployee.department || "",
       joinDate: selectedEmployee.joinDate?.split("T")[0] || new Date().toISOString().split("T")[0],
@@ -482,7 +486,7 @@ export default function EmployeesPage() {
                       <div className="flex gap-4 mt-1 text-xs text-muted-foreground flex-wrap">
                         {employee.position && <span>Position: {employee.position}</span>}
                         {employee.department && <span>Dept: {employee.department}</span>}
-                        {employee.salary && <span>Salary: {Number(employee.salary).toLocaleString()} AFN</span>}
+                        {employee.salary && <span>Salary: {Number(employee.salary).toLocaleString()} {employee.salaryCurrency}</span>}
                       </div>
                     </div>
                   </div>
@@ -644,6 +648,11 @@ export default function EmployeesPage() {
             <div className="space-y-2">
               <Label>Monthly Salary (AFN)</Label>
               <Input type="number" value={formData.salary} onChange={(e) => setFormData({ ...formData, salary: Number(e.target.value) })} />
+              <Label>Salary currency</Label>
+              <Select value={formData.salaryCurrency} onValueChange={(v) => v && setFormData({ ...formData, salaryCurrency: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{["AFN", "USD", "EUR"].map((currency) => <SelectItem key={currency} value={currency}>{currency}</SelectItem>)}</SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label>Join Date</Label>
@@ -699,6 +708,11 @@ export default function EmployeesPage() {
             <div className="space-y-2">
               <Label>Monthly Salary (AFN)</Label>
               <Input type="number" value={formData.salary} onChange={(e) => setFormData({ ...formData, salary: Number(e.target.value) })} />
+              <Label>Salary currency</Label>
+              <Select value={formData.salaryCurrency} onValueChange={(v) => v && setFormData({ ...formData, salaryCurrency: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{["AFN", "USD", "EUR"].map((currency) => <SelectItem key={currency} value={currency}>{currency}</SelectItem>)}</SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>

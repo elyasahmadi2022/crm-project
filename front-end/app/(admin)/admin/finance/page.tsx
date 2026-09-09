@@ -21,11 +21,19 @@ import {
 
 import { useListInvoicesQuery }  from "@/queries/finance.queries"
 import { useListExpensesQuery }  from "@/queries/finance.queries"
+import { useAccounts } from "@/queries/account.queries"
 import type { InvoiceStatus, ExpenseCategory } from "@/services/finance.service"
 
 // ── helpers ───────────────────────────────────────────────────────────────────
-function fmtMoney(n: number) {
-  return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2 })}`
+function fmtMoney(n: number, currency = "USD") {
+  return `${n.toLocaleString("en-US", { minimumFractionDigits: 2 })} ${currency}`
+}
+function formatTotals(totals: Record<string, number>) {
+  return Object.entries(totals).map(([currency, amount]) => fmtMoney(amount, currency)).join(" / ") || "0.00"
+}
+function addTotal(totals: Record<string, number>, currency: string, amount: number) {
+  totals[currency] = (totals[currency] ?? 0) + amount
+  return totals
 }
 function fmtDate(v: string | Date | null | undefined) {
   if (!v) return "—"
@@ -94,6 +102,7 @@ interface Transaction {
   party:       string
   category:    string
   amount:      number
+  currency:    string
   status?:     InvoiceStatus
   href:        string
 }
@@ -117,10 +126,11 @@ export default function FinancePage() {
 
   const { data: invData, isLoading: invLoading } = useListInvoicesQuery()
   const { data: expData, isLoading: expLoading } = useListExpensesQuery()
+  const { data: accounts = [], isLoading: accountsLoading } = useAccounts()
 
   const invoices  = invData?.data ?? []
   const expenses  = expData?.data ?? []
-  const isLoading = invLoading || expLoading
+  const isLoading = invLoading || expLoading || accountsLoading
 
   // ── Build unified transaction list ────────────────────────────────────────
   const allTransactions = React.useMemo((): Transaction[] => {
@@ -134,6 +144,7 @@ export default function FinancePage() {
         party:       inv.customer.companyName,
         category:    inv.project?.name ? `Project: ${inv.project.name}` : "Invoice",
         amount:      parseFloat(inv.amount),
+        currency:    inv.currency,
         status:      inv.status,
         href:        "/admin/finance/invoices",
       })
@@ -147,6 +158,7 @@ export default function FinancePage() {
         party:       exp.project?.name ?? "—",
         category:    exp.customCategory?.name ?? CAT_LABELS[exp.category] ?? exp.category,
         amount:      parseFloat(exp.amount),
+        currency:    exp.currency,
         href:        "/admin/finance/expenses",
       })
     })
@@ -163,15 +175,23 @@ export default function FinancePage() {
     })
   }, [allTransactions, fromDate, toDate, txType])
 
-  const filteredIncome   = filtered.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0)
-  const filteredExpenses = filtered.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0)
-  const filteredNet      = filteredIncome - filteredExpenses
+  const filteredIncome = filtered.filter(t => t.type === "income").reduce((totals, t) => addTotal(totals, t.currency, t.amount), {} as Record<string, number>)
+  const filteredExpenses = filtered.filter(t => t.type === "expense").reduce((totals, t) => addTotal(totals, t.currency, t.amount), {} as Record<string, number>)
+  const filteredNet = Object.keys({ ...filteredIncome, ...filteredExpenses }).reduce((totals, currency) => {
+    totals[currency] = (filteredIncome[currency] ?? 0) - (filteredExpenses[currency] ?? 0)
+    return totals
+  }, {} as Record<string, number>)
 
   // All-time KPIs
-  const totalCollected   = invoices.reduce((s, i) => s + parseFloat(i.payment.amountPaid), 0)
-  const totalOutstanding = invoices.reduce((s, i) => s + parseFloat(i.payment.balanceDue), 0)
+  const totalCollected = invoices.reduce((totals, i) => addTotal(totals, i.currency, parseFloat(i.payment.amountPaid)), {} as Record<string, number>)
+  const totalOutstanding = invoices.reduce((totals, i) => addTotal(totals, i.currency, parseFloat(i.payment.balanceDue)), {} as Record<string, number>)
   const overdueInvoices  = invoices.filter((i) => i.payment.isOverdue)
-  const totalExpensesAll = expenses.reduce((s, e) => s + parseFloat(e.amount), 0)
+  const totalExpensesAll = expenses.reduce((totals, e) => addTotal(totals, e.currency, parseFloat(e.amount)), {} as Record<string, number>)
+  const totalNet = Object.keys({ ...totalCollected, ...totalExpensesAll }).reduce((totals, currency) => {
+    totals[currency] = (totalCollected[currency] ?? 0) - (totalExpensesAll[currency] ?? 0)
+    return totals
+  }, {} as Record<string, number>)
+  const accountBalances = accounts.reduce((totals, account) => addTotal(totals, account.currency, Number(account.balance)), {} as Record<string, number>)
 
   return (
     <div className="flex flex-col gap-6">
@@ -190,18 +210,34 @@ export default function FinancePage() {
           ))
         ) : (
           <>
-            <StatCard label="Collected"      value={fmtMoney(totalCollected)}
+            <StatCard label="Collected"      value={formatTotals(totalCollected)}
               icon={CheckCircle2} color="text-green-600 bg-green-100" />
-            <StatCard label="Outstanding"    value={fmtMoney(totalOutstanding)}
+            <StatCard label="Outstanding"    value={formatTotals(totalOutstanding)}
               icon={Clock} color="text-orange-600 bg-orange-100"
               sub={`${overdueInvoices.length} overdue`} />
-            <StatCard label="Total expenses" value={fmtMoney(totalExpensesAll)}
+            <StatCard label="Total expenses" value={formatTotals(totalExpensesAll)}
               icon={TrendingDown} color="text-red-600 bg-red-100" />
-            <StatCard label="Net (all time)" value={fmtMoney(totalCollected - totalExpensesAll)}
+            <StatCard label="Net (all time)" value={formatTotals(totalNet)}
               icon={DollarSign} color="text-blue-600 bg-blue-100" />
           </>
         )}
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Account balances by currency</CardTitle>
+          <CardDescription>Available money across active company accounts.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          {Object.entries(accountBalances).map(([currency, amount]) => (
+            <div key={currency} className="rounded-lg border bg-muted/20 p-3">
+              <p className="text-xs text-muted-foreground">{currency}</p>
+              <p className="text-lg font-bold">{fmtMoney(amount, currency)}</p>
+            </div>
+          ))}
+          {Object.keys(accountBalances).length === 0 && <p className="text-sm text-muted-foreground">No active accounts.</p>}
+        </CardContent>
+      </Card>
 
       {/* Date range filter */}
       <Card>
@@ -253,18 +289,18 @@ export default function FinancePage() {
               <div className="flex items-center gap-1.5">
                 <ArrowIncome className="size-3.5 text-green-600" />
                 <span className="text-muted-foreground">Income:</span>
-                <span className="font-semibold text-green-600">{fmtMoney(filteredIncome)}</span>
+                <span className="font-semibold text-green-600">{formatTotals(filteredIncome)}</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <ArrowDownLeft className="size-3.5 text-red-500" />
                 <span className="text-muted-foreground">Expenses:</span>
-                <span className="font-semibold text-red-500">{fmtMoney(filteredExpenses)}</span>
+                <span className="font-semibold text-red-500">{formatTotals(filteredExpenses)}</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <DollarSign className="size-3.5 text-blue-600" />
                 <span className="text-muted-foreground">Net:</span>
-                <span className={`font-semibold ${filteredNet >= 0 ? "text-blue-600" : "text-destructive"}`}>
-                  {fmtMoney(filteredNet)}
+                <span className={`font-semibold ${Object.values(filteredNet).every((amount) => amount >= 0) ? "text-blue-600" : "text-destructive"}`}>
+                  {formatTotals(filteredNet)}
                 </span>
               </div>
               <span className="text-xs text-muted-foreground ml-auto">
@@ -351,7 +387,7 @@ export default function FinancePage() {
                         <span className="text-xs text-muted-foreground">{tx.category}</span>
                       </TableCell>
                       <TableCell className={`text-right pr-4 font-semibold ${tx.type === "income" ? "text-green-600" : "text-red-500"}`}>
-                        {tx.type === "income" ? "+" : "−"}{fmtMoney(tx.amount)}
+                        {tx.type === "income" ? "+" : "−"}{fmtMoney(tx.amount, tx.currency)}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -401,7 +437,7 @@ export default function FinancePage() {
                   {overdueInvoices.length} overdue invoice{overdueInvoices.length !== 1 ? "s" : ""}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Outstanding: {fmtMoney(overdueInvoices.reduce((s, i) => s + parseFloat(i.payment.balanceDue), 0))}
+                  Outstanding: {formatTotals(overdueInvoices.reduce((totals, i) => addTotal(totals, i.currency, parseFloat(i.payment.balanceDue)), {} as Record<string, number>))}
                 </p>
               </div>
             </div>

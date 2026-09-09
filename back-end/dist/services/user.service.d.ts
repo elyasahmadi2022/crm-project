@@ -12,6 +12,7 @@ export declare const userService: {
         password: string;
         avatarUrl: string | null;
         forcePasswordChange: boolean;
+        salaryCurrency: string;
         salary: Prisma.Decimal | null;
         position: string | null;
         department: string | null;
@@ -29,6 +30,7 @@ export declare const userService: {
         password: string;
         avatarUrl: string | null;
         forcePasswordChange: boolean;
+        salaryCurrency: string;
         salary: Prisma.Decimal | null;
         position: string | null;
         department: string | null;

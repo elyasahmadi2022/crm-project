@@ -36,14 +36,12 @@ export type DashboardLead = {
 }
 
 export type FinanceSnapshot = {
-  totalInvoiced: string
-  totalPaid: string
-  totalOutstanding: string
-  totalOverdue: string
+  totalsByCurrency: Record<string, { invoiced: number; paid: number; outstanding: number; overdue: number }>
   overdueInvoices: {
     id: number
     customer: string
     amount: string
+    currency: string
     days: number
   }[]
 }

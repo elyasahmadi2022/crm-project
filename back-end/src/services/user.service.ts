@@ -74,6 +74,7 @@ export const userService = {
             role: data.role,
             password: hashedPassword,
             ...(data.salary !== undefined && { salary: data.salary }),
+            salaryCurrency: data.salaryCurrency,
             ...(data.position !== undefined && { position: data.position }),
             ...(data.department !== undefined && { department: data.department }),
             ...(data.joinDate ? { joinDate: new Date(data.joinDate) } : {}),
