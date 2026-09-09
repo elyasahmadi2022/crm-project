@@ -1,0 +1,820 @@
+// ==========================================================
+// Luilala Customer & Project Management System
+// Prisma schema — MySQL
+// ==========================================================
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+// ------------------------------------------------------------
+// ENUMS
+// ------------------------------------------------------------
+
+enum UserRole {
+  ADMIN
+  SALES
+  DEVELOPER
+  DESIGNER
+  FINANCE
+  EMPLOYEE
+}
+
+enum CompanySize {
+  MICRO
+  SMALL
+  MEDIUM
+  LARGE
+  ENTERPRISE
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  PENDING
+  ON_HOLD
+  WON
+  LOST
+}
+
+enum CustomerStatus {
+  ACTIVE
+  INACTIVE
+  CHURNED
+  PROSPECT
+}
+
+enum InteractionType {
+  CALL
+  MEETING
+  EMAIL
+  NOTE
+}
+
+enum ProjectStage {
+  REQUIREMENTS
+  DESIGN
+  DEVELOPMENT
+  TESTING
+  DEPLOYMENT
+  LIVE
+}
+
+enum MilestoneStatus {
+  PENDING
+  IN_PROGRESS
+  DONE
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum CampaignStatus {
+  DRAFT
+  PLANNED
+  ACTIVE
+  PAUSED
+  COMPLETED
+}
+
+enum BudgetCategory {
+  MARKETING
+  DEVELOPMENT
+  OPERATIONS
+  SALES
+  HUMAN_RESOURCES
+  OTHER
+}
+
+enum ExpenseCategory {
+  SOFTWARE
+  HARDWARE
+  MARKETING
+  TRAVEL
+  SALARIES
+  OFFICE
+  OTHER
+  CUSTOM
+}
+
+enum Channel {
+  WHATSAPP
+  EMAIL
+  SMS
+  PHONE_CALL
+  OTHER
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+// NEW: Account types for financial tracking
+enum AccountType {
+  DAKHAL      // Income account
+  TAJIRI      // Business account
+  BANK        // Bank account
+  CASH        // Cash account
+  OTHER       // Other custom accounts
+}
+
+// NEW: Transaction types
+enum TransactionType {
+  CREDIT      // Money in
+  DEBIT       // Money out
+  TRANSFER    // Transfer between accounts
+}
+
+// NEW: Payroll status
+enum PayrollStatus {
+  PENDING
+  PAID
+  CANCELLED
+}
+
+// NEW: Report types
+enum ReportType {
+  DAILY
+  WEEKLY
+}
+
+// NEW: Attendance status
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  HALF_DAY
+  LEAVE
+  HOLIDAY
+}
+
+// ------------------------------------------------------------
+// USER (internal staff)
+// ------------------------------------------------------------
+
+model User {
+  id                   Int      @id @default(autoincrement())
+  name                 String
+  email                String   @unique
+  role                 UserRole
+  isActive             Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  password             String
+  avatarUrl            String?
+  forcePasswordChange  Boolean  @default(false)
+
+  // NEW: Employee fields
+  salary               Decimal? @db.Decimal(12, 2)
+  position             String?
+  department           String?
+  joinDate             DateTime?
+  faceEmbedding        String?  @db.Text  // Stored face recognition data
+
+  // Relations
+  ownedLeads           Lead[]               @relation("LeadOwner")
+  leadNotes            LeadNote[]
+  leadStatusChanges    LeadStatusHistory[]
+  ownedCustomers       Customer[]           @relation("CustomerOwner")
+  interactions         Interaction[]
+  projectAssignments   ProjectAssignment[]
+  projectStageChanges  ProjectStageHistory[]
+  invoiceStatusChanges InvoiceStatusHistory[]
+  otpCodes             OtpCode[]
+  contracts            Contract[]
+  
+  // NEW: HR Relations
+  payrolls             Payroll[]
+  advances             PayrollAdvance[]
+  reports              EmployeeReport[]
+  attendances          Attendance[]
+
+  @@map("users")
+}
+
+// ------------------------------------------------------------
+// OTP CODES (password reset)
+// ------------------------------------------------------------
+
+model OtpCode {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  code      String   // 6-digit hashed code
+  purpose   String   // "RESET_PASSWORD"
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("otp_codes")
+}
+
+// ------------------------------------------------------------
+// LEADS (public site + sales pipeline)
+// ------------------------------------------------------------
+
+model Lead {
+  id          Int         @id @default(autoincrement())
+  name        String
+  email       String?
+  phone       String?
+  companyName String
+  companySize CompanySize
+  message     String      @db.Text
+  status      LeadStatus  @default(NEW)
+
+  ownerId Int?
+  owner   User? @relation("LeadOwner", fields: [ownerId], references: [id])
+
+  campaignId Int?
+  campaign   Campaign? @relation(fields: [campaignId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  notes         LeadNote[]
+  statusHistory LeadStatusHistory[]
+  convertedTo   Customer?
+
+  @@map("leads")
+}
+
+model LeadNote {
+  id        Int      @id @default(autoincrement())
+  leadId    Int
+  lead      Lead     @relation(fields: [leadId], references: [id])
+  authorId  Int
+  author    User     @relation(fields: [authorId], references: [id])
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  @@map("lead_notes")
+}
+
+model LeadStatusHistory {
+  id          Int        @id @default(autoincrement())
+  leadId      Int
+  lead        Lead       @relation(fields: [leadId], references: [id])
+  oldStatus   LeadStatus?
+  newStatus   LeadStatus
+  changedById Int
+  changedBy   User       @relation(fields: [changedById], references: [id])
+  changedAt   DateTime   @default(now())
+
+  @@map("lead_status_history")
+}
+
+// ------------------------------------------------------------
+// CUSTOMER (CRM)
+// ------------------------------------------------------------
+
+model Customer {
+  id          Int            @id @default(autoincrement())
+  companyName String
+  industry    String?
+  size        CompanySize
+  address     String?
+  status      CustomerStatus @default(ACTIVE)
+
+  ownerId Int?
+  owner   User? @relation("CustomerOwner", fields: [ownerId], references: [id])
+
+  originLeadId Int?  @unique
+  originLead   Lead? @relation(fields: [originLeadId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contacts     Contact[]
+  interactions Interaction[]
+  projects     Project[]
+  invoices     Invoice[]
+  contracts    Contract[]
+
+  @@map("customers")
+}
+
+model Contact {
+  id         Int      @id @default(autoincrement())
+  customerId Int
+  customer   Customer @relation(fields: [customerId], references: [id])
+  name       String
+  role       String?
+  email      String?
+  phone      String?
+  createdAt  DateTime @default(now())
+
+  @@map("contacts")
+}
+
+model Interaction {
+  id         Int              @id @default(autoincrement())
+  customerId Int
+  customer   Customer         @relation(fields: [customerId], references: [id])
+  authorId   Int
+  author     User             @relation(fields: [authorId], references: [id])
+  type       InteractionType
+  content    String           @db.Text
+  createdAt  DateTime         @default(now())
+
+  @@map("interactions")
+}
+
+// ------------------------------------------------------------
+// PROJECTS (SDLC)
+// ------------------------------------------------------------
+
+model Project {
+  id          Int          @id @default(autoincrement())
+  customerId  Int
+  customer    Customer     @relation(fields: [customerId], references: [id])
+  name        String
+  description String?      @db.Text
+  stage       ProjectStage @default(REQUIREMENTS)
+  startDate   DateTime?
+  endDate     DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  milestones    Milestone[]
+  assignments   ProjectAssignment[]
+  stageHistory  ProjectStageHistory[]
+  invoices      Invoice[]
+  expenses      Expense[]
+
+  @@map("projects")
+}
+
+model Milestone {
+  id        Int             @id @default(autoincrement())
+  projectId Int
+  project   Project         @relation(fields: [projectId], references: [id])
+  title     String
+  dueDate   DateTime?
+  status    MilestoneStatus @default(PENDING)
+  createdAt DateTime        @default(now())
+
+  @@map("milestones")
+}
+
+model ProjectAssignment {
+  id         Int      @id @default(autoincrement())
+  projectId  Int
+  project    Project  @relation(fields: [projectId], references: [id])
+  employeeId Int
+  employee   User     @relation(fields: [employeeId], references: [id])
+  roleOnProject String?
+  assignedAt DateTime @default(now())
+
+  @@unique([projectId, employeeId])
+  @@map("project_assignments")
+}
+
+model ProjectStageHistory {
+  id          Int          @id @default(autoincrement())
+  projectId   Int
+  project     Project      @relation(fields: [projectId], references: [id])
+  oldStage    ProjectStage?
+  newStage    ProjectStage
+  changedById Int
+  changedBy   User         @relation(fields: [changedById], references: [id])
+  changedAt   DateTime     @default(now())
+
+  @@map("project_stage_history")
+}
+
+// ------------------------------------------------------------
+// FINANCE
+// ------------------------------------------------------------
+
+model Invoice {
+  id         Int           @id @default(autoincrement())
+  customerId Int
+  customer   Customer      @relation(fields: [customerId], references: [id])
+  projectId  Int?
+  project    Project?      @relation(fields: [projectId], references: [id])
+  amount     Decimal       @db.Decimal(12, 2)
+  status     InvoiceStatus @default(DRAFT)
+  issueDate  DateTime?
+  dueDate    DateTime?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  payments      Payment[]
+  statusHistory InvoiceStatusHistory[]
+
+  @@map("invoices")
+}
+
+model Payment {
+  id        Int      @id @default(autoincrement())
+  invoiceId Int
+  invoice   Invoice  @relation(fields: [invoiceId], references: [id])
+  amount    Decimal  @db.Decimal(12, 2)
+  method    String?
+  paidAt    DateTime @default(now())
+
+  @@map("payments")
+}
+
+model InvoiceStatusHistory {
+  id          Int            @id @default(autoincrement())
+  invoiceId   Int
+  invoice     Invoice        @relation(fields: [invoiceId], references: [id])
+  oldStatus   InvoiceStatus?
+  newStatus   InvoiceStatus
+  changedById Int
+  changedBy   User           @relation(fields: [changedById], references: [id])
+  changedAt   DateTime       @default(now())
+
+  @@map("invoice_status_history")
+}
+
+// ------------------------------------------------------------
+// MARKETING
+// ------------------------------------------------------------
+
+model Campaign {
+  id          Int            @id @default(autoincrement())
+  name        String
+  channel     String?        // e.g. "Facebook Ads", "LinkedIn", "Referral"
+  status      CampaignStatus @default(PLANNED)
+  budget      Decimal?       @db.Decimal(12, 2)
+  startDate   DateTime?
+  endDate     DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  leads    Lead[]
+  expenses Expense[]
+
+  @@map("campaigns")
+}
+
+// ------------------------------------------------------------
+// BUDGET & EXPENSES (finance expansion)
+// ------------------------------------------------------------
+
+model Budget {
+  id           Int            @id @default(autoincrement())
+  name         String
+  category     BudgetCategory
+  amount       Decimal        @db.Decimal(12, 2)
+  periodStart  DateTime?
+  periodEnd    DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  expenses Expense[]
+
+  @@map("budgets")
+}
+
+model Expense {
+  id          Int             @id @default(autoincrement())
+  description String
+  category    ExpenseCategory
+  amount      Decimal         @db.Decimal(12, 2)
+  spentAt     DateTime        @default(now())
+
+  budgetId Int?
+  budget   Budget? @relation(fields: [budgetId], references: [id])
+
+  projectId Int?
+  project   Project? @relation(fields: [projectId], references: [id])
+
+  campaignId Int?
+  campaign   Campaign? @relation(fields: [campaignId], references: [id])
+
+  customCategoryId Int?
+  customCategory   ExpenseCustomCategory? @relation(fields: [customCategoryId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@map("expenses")
+}
+
+// Custom categories created by admins (used when Expense.category = CUSTOM)
+model ExpenseCustomCategory {
+  id          Int      @id @default(autoincrement())
+  name        String
+  color       String   @default("#6366f1")
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  expenses    Expense[]
+
+  @@map("expense_custom_categories")
+}
+
+// Custom display config for each expense category (label, color, icon name)
+// One row per ExpenseCategory value; upserted by the settings UI.
+model ExpenseCategoryConfig {
+  id       Int             @id @default(autoincrement())
+  category ExpenseCategory @unique
+  label    String          // custom display name, e.g. "Cloud & SaaS"
+  color    String          @default("#6366f1") // hex
+  icon     String          @default("tag")     // lucide icon name
+
+  @@map("expense_category_configs")
+}
+
+// ------------------------------------------------------------
+// CONTRACTS
+// ------------------------------------------------------------
+
+enum ContractStatus {
+  DRAFT
+  SENT
+  SIGNED
+  CANCELLED
+}
+
+model Contract {
+  id         Int            @id @default(autoincrement())
+  customerId Int
+  customer   Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  // Invoice meta
+  invoiceDate      DateTime?
+  invoiceNumber    String?
+  orderId          String?
+  activationLimit  String?
+  activationProcess String?
+  paymentTerms     String?
+
+  // Project / cost
+  projectDescription String  @db.Text
+  projectDescLine    String? // short subtitle line
+  lineItemCost       Decimal @db.Decimal(12, 2) @default(0)
+  taxPercent         Decimal @db.Decimal(5, 2)  @default(0)
+  totalAmount        Decimal @db.Decimal(12, 2) @default(0)
+  grossTotal         Decimal @db.Decimal(12, 2) @default(0)
+
+  // Terms paragraph (dynamic — injected per contract type)
+  termsAndConditions String @db.LongText
+
+  // Signature
+  signedByName String?
+  signedAt     DateTime?
+
+  status    ContractStatus @default(DRAFT)
+  createdById Int
+  createdBy   User     @relation(fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("contracts")
+}
+
+// ------------------------------------------------------------
+// COMPANY SETTINGS  (singleton — always id = 1)
+// ------------------------------------------------------------
+
+model CompanySettings {
+  id        Int     @id @default(autoincrement())
+
+  name      String  @default("")
+  tagline   String  @default("")
+  logoUrl   String?
+
+  mobile    String  @default("")
+  email     String  @default("")
+  phone     String  @default("")
+  website   String  @default("")
+  whatsapp  String  @default("")
+  address   String  @default("")
+
+  // Footer line used on printed contracts
+  footerText String @default("")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("company_settings")
+}
+
+// ------------------------------------------------------------
+// CONTRACT TEMPLATE  (visual layout config — can have many,
+//                     one marked as default)
+// ------------------------------------------------------------
+
+model ContractTemplate {
+  id          Int      @id @default(autoincrement())
+  name        String
+  isDefault   Boolean  @default(false)
+
+  // Header layout
+  logoPosition     String  @default("left")   // left | center | right
+  headerBg         String  @default("#ffffff") // hex color
+  headerTextColor  String  @default("#111111")
+
+  // Which contact fields to display in the header
+  showMobile    Boolean @default(true)
+  showEmail     Boolean @default(true)
+  showPhone     Boolean @default(true)
+  showWebsite   Boolean @default(true)
+  showWhatsapp  Boolean @default(true)
+  showAddress   Boolean @default(true)
+  showTagline   Boolean @default(true)
+
+  // Body
+  bodyBg              String @default("#ffffff")
+  bodyTextColor       String @default("#111111")
+  accentColor         String @default("#2563eb")
+  borderColor         String @default("#e5e7eb")
+  fontSizeBase        Int    @default(13)       // px
+
+  // Sections visibility
+  showCustomerBlock   Boolean @default(true)
+  showCostTable       Boolean @default(true)
+  showTermsBlock      Boolean @default(true)
+  showSignatureBlock  Boolean @default(true)
+  showFooter          Boolean @default(true)
+
+  // Canvas layout (JSON blob — TemplateLayout from canvas-types.ts)
+  // Null until the user first opens the canvas editor.
+  layoutJson          String? @db.LongText
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("contract_templates")
+}
+
+// ------------------------------------------------------------
+// FINANCIAL ACCOUNTS (Dakhal, Tajiri, Bank, Cash, etc.)
+// ------------------------------------------------------------
+
+model Account {
+  id          Int         @id @default(autoincrement())
+  name        String      // e.g. "Dakhal Main", "Tajiri Business", "Bank Account"
+  type        AccountType
+  balance     Decimal     @db.Decimal(12, 2) @default(0)
+  currency    String      @default("USD")
+  description String?     @db.Text
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Relations
+  transactions        AccountTransaction[]
+  payrollsPaidFrom    Payroll[]
+
+  @@map("accounts")
+}
+
+model AccountTransaction {
+  id              Int             @id @default(autoincrement())
+  accountId       Int
+  account         Account         @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  
+  type            TransactionType // CREDIT, DEBIT, TRANSFER
+  amount          Decimal         @db.Decimal(12, 2)
+  balanceAfter    Decimal         @db.Decimal(12, 2)  // Account balance after this transaction
+  
+  description     String?         @db.Text
+  reference       String?         // e.g. "PAYROLL-2024-01", "PAYMENT-INV-123"
+  referenceType   String?         // e.g. "payroll", "invoice", "expense"
+  referenceId     Int?            // Link to payroll, invoice, etc.
+  
+  transactionDate DateTime        @default(now())
+  createdAt       DateTime        @default(now())
+
+  @@index([accountId])
+  @@index([referenceType, referenceId])
+  @@map("account_transactions")
+}
+
+// ------------------------------------------------------------
+// PAYROLL MANAGEMENT
+// ------------------------------------------------------------
+
+model Payroll {
+  id           Int            @id @default(autoincrement())
+  employeeId   Int
+  employee     User           @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  
+  month        Int            // 1-12
+  year         Int            // e.g. 2024
+  
+  baseSalary   Decimal        @db.Decimal(12, 2)
+  advances     Decimal        @db.Decimal(12, 2) @default(0)  // Total advances this month
+  deductions   Decimal        @db.Decimal(12, 2) @default(0)  // Other deductions
+  deductionReason String?     @db.Text  // Why was this deduction applied
+  bonuses      Decimal        @db.Decimal(12, 2) @default(0)  // Bonuses
+  netPay       Decimal        @db.Decimal(12, 2)              // baseSalary - advances - deductions + bonuses
+  
+  status       PayrollStatus  @default(PENDING)
+  
+  paidFromId   Int?
+  paidFrom     Account?       @relation(fields: [paidFromId], references: [id])
+  paidAt       DateTime?
+  paidBy       String?        // Name of person who processed payment
+  
+  notes        String?        @db.Text
+  
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@unique([employeeId, month, year])
+  @@index([month, year])
+  @@index([status])
+  @@map("payrolls")
+}
+
+model PayrollAdvance {
+  id              Int      @id @default(autoincrement())
+  employeeId      Int
+  employee        User     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  
+  amount          Decimal  @db.Decimal(12, 2)
+  reason          String?  @db.Text
+  advanceDate     DateTime @default(now())
+  
+  deductedAmount  Decimal  @db.Decimal(12, 2) @default(0)  // How much has been deducted so far
+  fullyDeducted   Boolean  @default(false)
+  
+  notes           String?  @db.Text
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([employeeId])
+  @@map("payroll_advances")
+}
+
+// ------------------------------------------------------------
+// EMPLOYEE DAILY/WEEKLY REPORTS
+// ------------------------------------------------------------
+
+model EmployeeReport {
+  id          Int        @id @default(autoincrement())
+  employeeId  Int
+  employee    User       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  
+  reportDate  DateTime   // Date of the report
+  type        ReportType // DAILY or WEEKLY
+  content     String     @db.LongText  // Rich text content
+  
+  submitted   Boolean    @default(true)
+  weekday     Int?       // 0-6 (0 = Sunday, 6 = Saturday) for daily reports
+  weekNumber  Int?       // Week number for weekly reports
+  
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([employeeId])
+  @@index([reportDate])
+  @@index([type])
+  @@map("employee_reports")
+}
+
+// ------------------------------------------------------------
+// FACE RECOGNITION ATTENDANCE
+// ------------------------------------------------------------
+
+model Attendance {
+  id            Int              @id @default(autoincrement())
+  employeeId    Int
+  employee      User             @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  
+  date          DateTime         @db.Date  // Date of attendance
+  checkIn       DateTime?        // Check-in timestamp
+  checkOut      DateTime?        // Check-out timestamp
+  
+  checkInImage  String?          // URL to check-in face image
+  checkOutImage String?          // URL to check-out face image
+  
+  status        AttendanceStatus @default(PRESENT)
+  
+  notes         String?          @db.Text
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@unique([employeeId, date])
+  @@index([employeeId])
+  @@index([date])
+  @@map("attendances")
+}
+

@@ -1,0 +1,18 @@
+import type { Request, Response, NextFunction } from "express";
+export declare const financeController: {
+    getAllInvoices: (req: Request, res: Response, next: NextFunction) => Promise<Response<import("../utiles/api-response.utiles.js").ApiSuccessResponse<import("../dtos/finance.dto.js").InvoiceResponseDto[]>, Record<string, any>> | undefined>;
+    getInvoiceById: (req: Request, res: Response, next: NextFunction) => Promise<Response<import("../utiles/api-response.utiles.js").ApiSuccessResponse<import("../dtos/finance.dto.js").InvoiceResponseDto>, Record<string, any>> | undefined>;
+    createInvoice: (req: Request, res: Response, next: NextFunction) => Promise<Response<import("../utiles/api-response.utiles.js").ApiSuccessResponse<import("../dtos/finance.dto.js").InvoiceResponseDto>, Record<string, any>> | undefined>;
+    updateInvoice: (req: Request, res: Response, next: NextFunction) => Promise<Response<import("../utiles/api-response.utiles.js").ApiSuccessResponse<import("../dtos/finance.dto.js").InvoiceResponseDto>, Record<string, any>> | undefined>;
+    changeInvoiceStatus: (req: Request, res: Response, next: NextFunction) => Promise<Response<import("../utiles/api-response.utiles.js").ApiSuccessResponse<import("../dtos/finance.dto.js").InvoiceResponseDto>, Record<string, any>> | undefined>;
+    addPayment: (req: Request, res: Response, next: NextFunction) => Promise<Response<import("../utiles/api-response.utiles.js").ApiSuccessResponse<import("../dtos/finance.dto.js").PaymentResponseDto>, Record<string, any>> | undefined>;
+    getAllBudgets: (req: Request, res: Response, next: NextFunction) => Promise<Response<import("../utiles/api-response.utiles.js").ApiSuccessResponse<import("../dtos/finance.dto.js").BudgetResponseDto[]>, Record<string, any>> | undefined>;
+    getBudgetById: (req: Request, res: Response, next: NextFunction) => Promise<Response<import("../utiles/api-response.utiles.js").ApiSuccessResponse<import("../dtos/finance.dto.js").BudgetResponseDto>, Record<string, any>> | undefined>;
+    createBudget: (req: Request, res: Response, next: NextFunction) => Promise<Response<import("../utiles/api-response.utiles.js").ApiSuccessResponse<import("../dtos/finance.dto.js").BudgetResponseDto>, Record<string, any>> | undefined>;
+    updateBudget: (req: Request, res: Response, next: NextFunction) => Promise<Response<import("../utiles/api-response.utiles.js").ApiSuccessResponse<import("../dtos/finance.dto.js").BudgetResponseDto>, Record<string, any>> | undefined>;
+    getAllExpenses: (req: Request, res: Response, next: NextFunction) => Promise<Response<import("../utiles/api-response.utiles.js").ApiSuccessResponse<import("../dtos/finance.dto.js").ExpenseResponseDto[]>, Record<string, any>> | undefined>;
+    getExpenseById: (req: Request, res: Response, next: NextFunction) => Promise<Response<import("../utiles/api-response.utiles.js").ApiSuccessResponse<import("../dtos/finance.dto.js").ExpenseResponseDto>, Record<string, any>> | undefined>;
+    createExpense: (req: Request, res: Response, next: NextFunction) => Promise<Response<import("../utiles/api-response.utiles.js").ApiSuccessResponse<import("../dtos/finance.dto.js").ExpenseResponseDto>, Record<string, any>> | undefined>;
+    updateExpense: (req: Request, res: Response, next: NextFunction) => Promise<Response<import("../utiles/api-response.utiles.js").ApiSuccessResponse<import("../dtos/finance.dto.js").ExpenseResponseDto>, Record<string, any>> | undefined>;
+};
+//# sourceMappingURL=finance.controller.d.ts.map
