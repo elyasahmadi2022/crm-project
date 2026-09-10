@@ -563,7 +563,11 @@ export default function RegularDashboardPage() {
                 {projects.map((p: any) => {
                   const miles = p.milestones ?? []
                   const done  = miles.filter((m: any) => m.status === "COMPLETED").length
-                  const prog  = miles.length > 0 ? Math.round((done / miles.length) * 100) : p.progress ?? 0
+                  const rawProg = p.progress
+                  const fallback = rawProg && typeof rawProg === "object"
+                    ? (rawProg.percentComplete ?? 0)
+                    : (rawProg ?? 0)
+                  const prog  = miles.length > 0 ? Math.round((done / miles.length) * 100) : fallback
                   const isActive = !["COMPLETED","CANCELLED"].includes(p.stage ?? "")
                   return (
                     <div key={p.id} className="p-3 rounded-xl border hover:border-border/80 hover:bg-muted/30 transition-colors">

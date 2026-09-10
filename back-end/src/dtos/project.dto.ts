@@ -46,6 +46,7 @@ export type ListProjectsQueryDto = z.infer<typeof listProjectsQuerySchema>;
 export const createMilestoneSchema = z.object({
   title: z.string().min(1),
   dueDate: z.coerce.date().optional(),
+  assignedEmployeeId: z.number().int().positive().optional(),
 });
 export type CreateMilestoneDto = z.infer<typeof createMilestoneSchema>;
 
@@ -53,6 +54,7 @@ export const updateMilestoneSchema = z.object({
   title: z.string().min(1).optional(),
   dueDate: z.coerce.date().optional(),
   status: z.nativeEnum(MilestoneStatus).optional(),
+  assignedEmployeeId: z.number().int().positive().nullable().optional(),
 });
 export type UpdateMilestoneDto = z.infer<typeof updateMilestoneSchema>;
 
@@ -85,9 +87,11 @@ export interface MilestoneResponseDto {
   status: MilestoneStatus;
   isOverdue: boolean;
   createdAt: Date;
+  assignedEmployeeId: number | null;
+  assignedEmployee: { id: number; name: string; avatarUrl: string | null } | null;
 }
 
-export const toMilestoneResponseDto = (milestone: Milestone): MilestoneResponseDto => ({
+export const toMilestoneResponseDto = (milestone: any): MilestoneResponseDto => ({
   id: milestone.id,
   projectId: milestone.projectId,
   title: milestone.title,
@@ -95,6 +99,8 @@ export const toMilestoneResponseDto = (milestone: Milestone): MilestoneResponseD
   status: milestone.status,
   isOverdue: milestone.status === 'PENDING' && !!milestone.dueDate && milestone.dueDate < new Date(),
   createdAt: milestone.createdAt,
+  assignedEmployeeId: milestone.assignedEmployeeId ?? null,
+  assignedEmployee: milestone.assignedEmployee ?? null,
 });
 
 export interface ProjectAssignmentResponseDto {

@@ -207,6 +207,7 @@ model User {
   advances    PayrollAdvance[]
   reports     EmployeeReport[]
   attendances Attendance[]
+  assignedMilestones Milestone[] @relation("MilestoneAssignee")
 
   @@map("users")
 }
@@ -366,13 +367,17 @@ model Project {
 }
 
 model Milestone {
-  id        Int             @id @default(autoincrement())
-  projectId Int
-  project   Project         @relation(fields: [projectId], references: [id])
-  title     String
-  dueDate   DateTime?
-  status    MilestoneStatus @default(PENDING)
-  createdAt DateTime        @default(now())
+  id         Int             @id @default(autoincrement())
+  projectId  Int
+  project    Project         @relation(fields: [projectId], references: [id])
+  title      String
+  dueDate    DateTime?
+  status     MilestoneStatus @default(PENDING)
+
+  assignedEmployeeId Int?
+  assignedEmployee   User? @relation("MilestoneAssignee", fields: [assignedEmployeeId], references: [id])
+
+  createdAt  DateTime        @default(now())
 
   @@map("milestones")
 }

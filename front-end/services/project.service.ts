@@ -74,6 +74,8 @@ export interface MilestoneDto {
   status: MilestoneStatus
   isOverdue: boolean
   createdAt: string
+  assignedEmployeeId: number | null
+  assignedEmployee: { id: number; name: string; avatarUrl: string | null } | null
 }
 
 export interface AssignmentDto {
@@ -102,12 +104,13 @@ export interface UpdateProjectDto {
 
 export interface ChangeStageDto { newStage: ProjectStage }
 
-export interface CreateMilestoneDto { title: string; dueDate?: string }
+export interface CreateMilestoneDto { title: string; dueDate?: string; assignedEmployeeId?: number }
 
 export interface UpdateMilestoneDto {
   title?: string
   dueDate?: string
   status?: MilestoneStatus
+  assignedEmployeeId?: number | null
 }
 
 export interface AssignTeamMemberDto { employeeId: number; roleOnProject?: string }

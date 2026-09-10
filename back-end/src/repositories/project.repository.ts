@@ -5,7 +5,11 @@ import { prisma } from "../lib/primsa.js";
 // This mirrors the exact prisma.project.findUnique include query requested in your DTO comments
 const withDetails = {
     customer: true,
-    milestones: true,
+    milestones: {
+        include: {
+            assignedEmployee: { select: { id: true, name: true, avatarUrl: true } },
+        },
+    },
     assignments: { include: { employee: true } },
     invoices: { select: { amount: true } },
     expenses: { select: { amount: true } },
@@ -40,14 +44,24 @@ export const projectRepository = {
     },
 
     // --- Milestones ---
-    findMilestoneById: (id: number): Promise<Milestone | null> => {
-        return prisma.milestone.findUnique({ where: { id } });
+    findMilestoneById: (id: number) => {
+        return prisma.milestone.findUnique({
+            where: { id },
+            include: { assignedEmployee: { select: { id: true, name: true, avatarUrl: true } } },
+        });
     },
-    createMilestone: (projectId: number, data: Prisma.MilestoneCreateWithoutProjectInput): Promise<Milestone> => {
-        return prisma.milestone.create({ data: { ...data, project: { connect: { id: projectId } } } });
+    createMilestone: (projectId: number, data: Prisma.MilestoneCreateWithoutProjectInput) => {
+        return prisma.milestone.create({
+            data: { ...data, project: { connect: { id: projectId } } },
+            include: { assignedEmployee: { select: { id: true, name: true, avatarUrl: true } } },
+        });
     },
-    updateMilestone: (id: number, data: Prisma.MilestoneUpdateInput): Promise<Milestone> => {
-        return prisma.milestone.update({ where: { id }, data });
+    updateMilestone: (id: number, data: Prisma.MilestoneUpdateInput) => {
+        return prisma.milestone.update({
+            where: { id },
+            data,
+            include: { assignedEmployee: { select: { id: true, name: true, avatarUrl: true } } },
+        });
     },
 
     // --- Assignments ---

@@ -31,6 +31,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
 
 import {
@@ -111,9 +112,10 @@ const stageSchema = z.object({
 type StageFormValues = z.infer<typeof stageSchema>
 
 const milestoneSchema = z.object({
-  title:   z.string().min(1, "Title is required."),
-  dueDate: z.string().optional(),
-  status:  z.enum(["PENDING","IN_PROGRESS","DONE"] as const).optional(),
+  title:              z.string().min(1, "Title is required."),
+  dueDate:            z.string().optional(),
+  status:             z.enum(["PENDING","IN_PROGRESS","DONE"] as const).optional(),
+  assignedEmployeeId: z.coerce.number().positive().optional().or(z.literal(0)).transform(v => v || undefined),
 })
 type MilestoneFormValues = z.infer<typeof milestoneSchema>
 
@@ -263,103 +265,218 @@ function ChangeStageDialog({ projectId, currentStage, onClose }: { projectId: nu
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ADD/EDIT MILESTONE FORMS
+// ADD MILESTONE DIALOG
 // ═══════════════════════════════════════════════════════════════════════════════
-function AddMilestoneForm({ projectId }: { projectId: number }) {
+function AddMilestoneDialog({ projectId, teamMembers, open, onClose }: {
+  projectId: number
+  teamMembers: { id: number; name: string; avatarUrl: string | null; role: string }[]
+  open: boolean
+  onClose: () => void
+}) {
   const addMut = useAddMilestoneMutation()
   const { register, handleSubmit, control, reset, formState: { errors } } = useForm<MilestoneFormValues>({
-    resolver: zodResolver(milestoneSchema),
-    defaultValues: { title: "", dueDate: "" },
+    resolver: zodResolver(milestoneSchema) as any,
+    defaultValues: { title: "", dueDate: "", assignedEmployeeId: undefined },
     mode: "onTouched",
   })
 
   function onSubmit(v: MilestoneFormValues) {
     addMut.mutate(
-      { id: projectId, dto: { title: v.title, dueDate: v.dueDate || undefined } },
-      { onSuccess: () => reset() }
+      { id: projectId, dto: {
+        title: v.title,
+        dueDate: v.dueDate || undefined,
+        assignedEmployeeId: v.assignedEmployeeId || undefined,
+      }},
+      { onSuccess: () => { reset(); onClose() } }
     )
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex gap-2">
-      <div className="flex-1 flex flex-col gap-1">
-        <Input placeholder="Milestone title" aria-invalid={!!errors.title} {...register("title")} />
-        <FieldError message={errors.title?.message} />
-      </div>
-      <Controller
-        control={control}
-        name="dueDate"
-        render={({ field }) => (
-          <DatePicker
-            value={field.value ? new Date(field.value) : undefined}
-            onChange={(date) => field.onChange(date ? date.toISOString().split('T')[0] : '')}
-            placeholder="Due date"
-            className="w-40 shrink-0"
-          />
-        )}
-      />
-      <Button type="submit" size="sm" disabled={addMut.isPending}>
-        {addMut.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}
-      </Button>
-    </form>
+    <Dialog open={open} onOpenChange={o => { if (!o) onClose() }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Flag className="h-4 w-4 text-muted-foreground"/>
+            Add Milestone
+          </DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4 py-2">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium">Title <span className="text-destructive">*</span></label>
+            <Input placeholder="e.g. Implement login screen" aria-invalid={!!errors.title} {...register("title")} />
+            <FieldError message={errors.title?.message} />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium">Due Date</label>
+            <Controller control={control} name="dueDate" render={({ field }) => (
+              <DatePicker
+                value={field.value ? new Date(field.value) : undefined}
+                onChange={d => field.onChange(d ? d.toISOString().split("T")[0] : "")}
+                placeholder="Select due date"
+              />
+            )} />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium">Assign to <span className="text-xs text-muted-foreground font-normal">(optional)</span></label>
+            <Controller control={control} name="assignedEmployeeId" render={({ field }) => (
+              <Select
+                value={field.value ? String(field.value) : ""}
+                onValueChange={v => field.onChange(v ? Number(v) : undefined)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Unassigned">
+                    {field.value
+                      ? (() => {
+                          const m = teamMembers.find(t => t.id === field.value)
+                          return m ? (
+                            <span className="flex items-center gap-2">
+                              <Avatar className="h-5 w-5"><AvatarFallback className="text-[9px]">{m.name.split(" ").map(n=>n[0]).join("")}</AvatarFallback></Avatar>
+                              {m.name}
+                            </span>
+                          ) : "Unassigned"
+                        })()
+                      : "Unassigned"
+                    }
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Unassigned</SelectItem>
+                  {teamMembers.map(m => (
+                    <SelectItem key={m.id} value={String(m.id)}>
+                      <span className="flex items-center gap-2">
+                        <Avatar className="h-5 w-5">
+                          <AvatarImage src={m.avatarUrl ?? undefined}/>
+                          <AvatarFallback className="text-[9px]">{m.name.split(" ").map(n=>n[0]).join("")}</AvatarFallback>
+                        </Avatar>
+                        <span>{m.name}</span>
+                        <span className="text-xs text-muted-foreground ml-1">{m.role}</span>
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )} />
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose} disabled={addMut.isPending}>Cancel</Button>
+            <Button type="submit" disabled={addMut.isPending}>
+              {addMut.isPending && <Loader2 className="size-3.5 animate-spin mr-1"/>}
+              {addMut.isPending ? "Adding…" : "Add Milestone"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }
 
-function EditMilestoneForm({ milestone, onCancel }: { milestone: MilestoneDto; onCancel: () => void }) {
+function EditMilestoneForm({ milestone, teamMembers, onCancel }: {
+  milestone: MilestoneDto
+  teamMembers: { id: number; name: string; avatarUrl: string | null; role: string }[]
+  onCancel: () => void
+}) {
   const updateMut = useUpdateMilestoneMutation()
   const { register, handleSubmit, control, formState: { errors } } = useForm<MilestoneFormValues>({
-    resolver: zodResolver(milestoneSchema),
+    resolver: zodResolver(milestoneSchema) as any,
     defaultValues: {
-      title: milestone.title,
-      dueDate: milestone.dueDate ? milestone.dueDate.slice(0, 10) : "",
-      status: milestone.status,
+      title:              milestone.title,
+      dueDate:            milestone.dueDate ? milestone.dueDate.slice(0, 10) : "",
+      status:             milestone.status,
+      assignedEmployeeId: milestone.assignedEmployeeId ?? undefined,
     },
     mode: "onTouched",
   })
 
   function onSubmit(v: MilestoneFormValues) {
     updateMut.mutate(
-      { milestoneId: milestone.id, dto: { title: v.title, dueDate: v.dueDate || undefined, status: v.status } },
+      { milestoneId: milestone.id, dto: {
+        title:              v.title,
+        dueDate:            v.dueDate || undefined,
+        status:             v.status,
+        assignedEmployeeId: v.assignedEmployeeId || null,
+      }},
       { onSuccess: onCancel }
     )
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-3 rounded-lg border p-3 bg-muted/20">
-      <p className="text-sm font-medium">Edit milestone</p>
-      <div className="grid grid-cols-2 gap-2">
-        <div className="flex flex-col gap-1">
-          <Input placeholder="Title" aria-invalid={!!errors.title} {...register("title")} />
-          <FieldError message={errors.title?.message} />
-        </div>
-        <Controller
-          control={control}
-          name="dueDate"
-          render={({ field }) => (
-            <DatePicker
-              value={field.value ? new Date(field.value) : undefined}
-              onChange={(date) => field.onChange(date ? date.toISOString().split('T')[0] : '')}
-              placeholder="Due date"
-            />
-          )}
-        />
+    <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-3 rounded-xl border p-4 bg-muted/20">
+      <p className="text-sm font-semibold">Edit milestone</p>
+
+      <div className="flex flex-col gap-1">
+        <Input placeholder="Title" aria-invalid={!!errors.title} {...register("title")} />
+        <FieldError message={errors.title?.message} />
       </div>
-      <Controller control={control} name="status" render={({ field }) => (
-        <Select value={field.value} onValueChange={field.onChange}>
-          <SelectTrigger className="w-full">
-            <SelectValue>
-              {field.value ? MILESTONE_STATUS_LABELS[field.value] : "Select status"}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            {ALL_MILESTONE_STATUSES.map((s) => <SelectItem key={s} value={s}>{MILESTONE_STATUS_LABELS[s]}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      )} />
+
+      <div className="grid grid-cols-2 gap-2">
+        <Controller control={control} name="dueDate" render={({ field }) => (
+          <DatePicker
+            value={field.value ? new Date(field.value) : undefined}
+            onChange={d => field.onChange(d ? d.toISOString().split("T")[0] : "")}
+            placeholder="Due date"
+          />
+        )} />
+        <Controller control={control} name="status" render={({ field }) => (
+          <Select value={field.value ?? ""} onValueChange={field.onChange}>
+            <SelectTrigger className="w-full">
+              <SelectValue>{field.value ? MILESTONE_STATUS_LABELS[field.value] : "Status"}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {ALL_MILESTONE_STATUSES.map(s => <SelectItem key={s} value={s}>{MILESTONE_STATUS_LABELS[s]}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )} />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs text-muted-foreground font-medium">Assign to</label>
+        <Controller control={control} name="assignedEmployeeId" render={({ field }) => (
+          <Select
+            value={field.value ? String(field.value) : ""}
+            onValueChange={v => field.onChange(v ? Number(v) : undefined)}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Unassigned">
+                {field.value
+                  ? (() => {
+                      const m = teamMembers.find(t => t.id === field.value)
+                      return m ? (
+                        <span className="flex items-center gap-2">
+                          <Avatar className="h-5 w-5"><AvatarFallback className="text-[9px]">{m.name.split(" ").map(n=>n[0]).join("")}</AvatarFallback></Avatar>
+                          {m.name}
+                        </span>
+                      ) : "Unassigned"
+                    })()
+                  : "Unassigned"
+                }
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">Unassigned</SelectItem>
+              {teamMembers.map(m => (
+                <SelectItem key={m.id} value={String(m.id)}>
+                  <span className="flex items-center gap-2">
+                    <Avatar className="h-5 w-5">
+                      <AvatarImage src={m.avatarUrl ?? undefined}/>
+                      <AvatarFallback className="text-[9px]">{m.name.split(" ").map(n=>n[0]).join("")}</AvatarFallback>
+                    </Avatar>
+                    {m.name}
+                    <span className="text-xs text-muted-foreground">{m.role}</span>
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )} />
+      </div>
+
       <div className="flex gap-2 justify-end">
         <Button type="button" variant="outline" size="sm" onClick={onCancel}>Cancel</Button>
         <Button type="submit" size="sm" disabled={updateMut.isPending}>
-          {updateMut.isPending ? <Loader2 className="size-3.5 animate-spin" /> : "Save"}
+          {updateMut.isPending && <Loader2 className="size-3.5 animate-spin mr-1"/>}Save
         </Button>
       </div>
     </form>
@@ -437,6 +554,7 @@ export default function ProjectDetailPage() {
   const [changeStageOpen, setChangeStageOpen] = React.useState(false)
   const [editingMilestoneId, setEditingMilestoneId] = React.useState<number | null>(null)
   const [milestoneFilter, setMilestoneFilter] = React.useState<MilestoneStatus | "ALL">("ALL")
+  const [addMilestoneOpen, setAddMilestoneOpen] = React.useState(false)
 
   const filteredMilestones = React.useMemo(() => {
     let filtered = milestoneFilter === "ALL" 
@@ -477,6 +595,12 @@ export default function ProjectDetailPage() {
   }
 
   const assignedIds = new Set(project.team.map(m => m.id))
+  const teamMembers = project.assignments.map(a => ({
+    id: a.employee.id,
+    name: a.employee.name,
+    avatarUrl: (a.employee as any).avatarUrl ?? null,
+    role: a.employee.role,
+  }))
 
   return (
     <div className="flex flex-col gap-6">
@@ -700,69 +824,93 @@ export default function ProjectDetailPage() {
                   </SelectContent>
                 </Select>
                 <Badge variant="secondary">{filteredMilestones.length}</Badge>
+                <Button size="sm" onClick={() => setAddMilestoneOpen(true)}>
+                  <Plus className="size-3.5 mr-1" />Add
+                </Button>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <AddMilestoneForm projectId={projectId} />
-
               {filteredMilestones.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-6">
-                  {milestoneFilter === "ALL" ? "No milestones yet. Add your first milestone above." : `No ${MILESTONE_STATUS_LABELS[milestoneFilter].toLowerCase()} milestones.`}
-                </p>
+                <div className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground gap-3">
+                  <Flag className="h-10 w-10 opacity-30" />
+                  <p className="text-sm">
+                    {milestoneFilter === "ALL"
+                      ? "No milestones yet. Click \"Add\" to create the first one."
+                      : `No ${MILESTONE_STATUS_LABELS[milestoneFilter].toLowerCase()} milestones.`}
+                  </p>
+                  {milestoneFilter === "ALL" && (
+                    <Button size="sm" variant="outline" onClick={() => setAddMilestoneOpen(true)}>
+                      <Plus className="size-3.5 mr-1"/>Add Milestone
+                    </Button>
+                  )}
+                </div>
               ) : (
                 <div className="space-y-2">
                   {filteredMilestones.map((m) => (
                     editingMilestoneId === m.id ? (
-                      <EditMilestoneForm key={m.id} milestone={m} onCancel={() => setEditingMilestoneId(null)} />
+                      <EditMilestoneForm key={m.id} milestone={m} teamMembers={teamMembers} onCancel={() => setEditingMilestoneId(null)} />
                     ) : (
-                      <div key={m.id} className="flex items-start gap-3 rounded-lg border p-3 hover:bg-muted/50 transition-colors">
+                      <div key={m.id} className={`group flex items-start gap-3 rounded-xl border p-3 transition-colors hover:bg-muted/40 ${
+                        m.isOverdue ? "border-amber-200 bg-amber-50/40 dark:bg-amber-900/10 dark:border-amber-900/30" :
+                        m.status === "DONE" ? "border-emerald-200 bg-emerald-50/40 dark:bg-emerald-900/10 dark:border-emerald-900/30" : ""
+                      }`}>
+                        {/* Status dot */}
+                        <div className={`mt-1 w-2.5 h-2.5 rounded-full shrink-0 ${
+                          m.status === "DONE" ? "bg-emerald-500" :
+                          m.status === "IN_PROGRESS" ? "bg-blue-500" : "bg-slate-400"
+                        }`}/>
+
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <p className="text-sm font-medium truncate">{m.title}</p>
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <p className={`text-sm font-medium truncate ${m.status === "DONE" ? "line-through text-muted-foreground" : ""}`}>
+                              {m.title}
+                            </p>
                             <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${MILESTONE_STATUS_CLASS[m.status]}`}>
                               {MILESTONE_STATUS_LABELS[m.status]}
                             </span>
                             {m.isOverdue && (
-                              <Badge variant="destructive" className="text-[10px] h-4 px-1">
-                                Overdue
-                              </Badge>
+                              <Badge variant="destructive" className="text-[10px] h-4 px-1">Overdue</Badge>
                             )}
                           </div>
-                          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                          <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
                             {m.dueDate && (
                               <span className="flex items-center gap-1">
-                                <Calendar className="size-3" />
+                                <Calendar className="size-3"/>
                                 {fmtDate(m.dueDate)}
+                              </span>
+                            )}
+                            {m.assignedEmployee && (
+                              <span className="flex items-center gap-1">
+                                <Avatar className="h-4 w-4">
+                                  <AvatarImage src={m.assignedEmployee.avatarUrl ?? undefined}/>
+                                  <AvatarFallback className="text-[8px]">
+                                    {m.assignedEmployee.name.split(" ").map(n=>n[0]).join("")}
+                                  </AvatarFallback>
+                                </Avatar>
+                                {m.assignedEmployee.name}
+                              </span>
+                            )}
+                            {!m.assignedEmployee && (
+                              <span className="flex items-center gap-1 text-muted-foreground/60">
+                                <Users className="size-3"/>Unassigned
                               </span>
                             )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            onClick={() => setEditingMilestoneId(m.id)}
-                            title="Edit milestone"
-                          >
-                            <Pencil className="size-3" />
+
+                        <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button variant="ghost" size="icon-sm" onClick={() => setEditingMilestoneId(m.id)} title="Edit">
+                            <Pencil className="size-3"/>
                           </Button>
                           {m.status !== "DONE" && (
                             <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              onClick={() => updateMilestoneMut.mutate({
-                                milestoneId: m.id,
-                                dto: { status: "DONE" }
-                              })}
+                              variant="ghost" size="icon-sm"
+                              onClick={() => updateMilestoneMut.mutate({ milestoneId: m.id, dto: { status: "DONE" } })}
                               disabled={updateMilestoneMut.isPending}
                               title="Mark as done"
-                              className="text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950"
+                              className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950"
                             >
-                              {updateMilestoneMut.isPending ? (
-                                <Loader2 className="size-3 animate-spin" />
-                              ) : (
-                                <CheckCircle2 className="size-3" />
-                              )}
+                              {updateMilestoneMut.isPending ? <Loader2 className="size-3 animate-spin"/> : <CheckCircle2 className="size-3"/>}
                             </Button>
                           )}
                         </div>
@@ -868,6 +1016,13 @@ export default function ProjectDetailPage() {
       </div>
 
       {/* Dialogs */}
+      <AddMilestoneDialog
+        projectId={projectId}
+        teamMembers={teamMembers}
+        open={addMilestoneOpen}
+        onClose={() => setAddMilestoneOpen(false)}
+      />
+
       <Dialog open={editInfoOpen} onOpenChange={setEditInfoOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>

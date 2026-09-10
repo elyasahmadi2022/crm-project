@@ -103,6 +103,9 @@ export const projectService = {
 
         const milestoneInput: any = { title: data.title, status: MilestoneStatus.PENDING };
         if (data.dueDate !== undefined) milestoneInput.dueDate = data.dueDate;
+        if (data.assignedEmployeeId !== undefined) {
+            milestoneInput.assignedEmployee = { connect: { id: data.assignedEmployeeId } };
+        }
 
         const milestone = await projectRepository.createMilestone(projectId, milestoneInput);
         return toMilestoneResponseDto(milestone);
@@ -116,6 +119,11 @@ export const projectService = {
         if (data.title !== undefined) updatePayload.title = data.title;
         if (data.dueDate !== undefined) updatePayload.dueDate = data.dueDate;
         if (data.status !== undefined) updatePayload.status = data.status;
+        if (data.assignedEmployeeId !== undefined) {
+            updatePayload.assignedEmployee = data.assignedEmployeeId
+                ? { connect: { id: data.assignedEmployeeId } }
+                : { disconnect: true };
+        }
 
         const updated = await projectRepository.updateMilestone(id, updatePayload);
         return toMilestoneResponseDto(updated);
